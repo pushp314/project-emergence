@@ -11,7 +11,7 @@ from app.events.schemas import AgentMessage, ConversationState
 from app.agents.base import BaseAgent, AgentContext
 from app.orchestration.scheduler import Scheduler, create_scheduler
 from app.orchestration.state_machine import StateMachine, ConversationState as SMState
-from app.memory import MemoryManager
+from app.memory import MemoryManager, ContextManager
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +32,12 @@ class ConversationEngine:
         config: ConversationConfig,
         agents: Dict[str, BaseAgent],
         event_bus: Optional[EventBus] = None,
-        memory_manager: Optional[MemoryManager] = None
+        context_manager: Optional[ContextManager] = None
     ):
         self.config = config
         self.agents = agents
         self.event_bus = event_bus or get_event_bus()
-        self.memory_manager = memory_manager
+        self.context_manager = context_manager
         
         self.state_machine = StateMachine()
         self.scheduler = create_scheduler(
@@ -222,7 +222,7 @@ class ConversationEngine:
         
         message = AgentMessage(
             agent_id=speaker_id,
-            role=agent.config.role,
+            agent_identity=agent.config.agent_identity,
             content=response,
             turn_number=self.turn_number
         )
@@ -230,8 +230,8 @@ class ConversationEngine:
         
         await agent.emit_message(self.conversation_id, response, self.turn_number)
         
-        if self.memory_manager:
-            await self.memory_manager.record_message(message)
+        if self.context_manager:
+            await self.context_manager.update_from_message(message, self.turn_number)
         
         for callback in self._turn_callbacks:
             try:
@@ -257,8 +257,7 @@ class ConversationEngine:
         
         await self._maybe_trigger_observer()
         
-        if self.memory_manager:
-            await self.memory_manager.maybe_summarize(self.turn_number)
+        # Summarization is now handled by ContextManager internally within update_from_message
         
         # Check for shutdown before next turn
         if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
@@ -278,13 +277,13 @@ class ConversationEngine:
         recent = self._message_history[-self.config.short_term_turns:] if self._message_history else []
         
         memory_summary = ""
-        if self.memory_manager:
+        if self.context_manager:
             import asyncio
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     context_data = asyncio.run_coroutine_threadsafe(
-                        self.memory_manager.get_context(self.turn_number, self.config.short_term_turns),
+                        self.context_manager.get_context_for_llm(),
                         loop
                     ).result(timeout=5)
                     memory_summary = context_data.get("summary", "")

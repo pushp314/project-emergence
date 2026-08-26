@@ -251,7 +251,6 @@ class TestMemoryStore:
     
     def test_save_and_get_messages(self, store):
         from app.memory.store import ConversationRecord
-        from app.events.schemas import AgentRole
         
         record = ConversationRecord(
             id="test-1",

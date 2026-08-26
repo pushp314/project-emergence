@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -127,9 +128,9 @@ class CapabilityRegistry:
     async def request_capability(self, request: CapabilityRequest) -> CapabilityResult:
         start_time = time.time()
         
-        handlers = self._request_handlers.get(request.capability, [])
+        handler = self._request_handlers.get(request.capability)
         
-        if not handlers:
+        if not handler:
             return CapabilityResult(
                 request_id=request.request_id,
                 capability=request.capability,
@@ -139,23 +140,20 @@ class CapabilityRegistry:
                 latency_ms=(time.time() - start_time) * 1000
             )
         
-        for handler in handlers:
-            try:
-                result = await handler(request)
-                self._record_routing(request, result)
-                return result
-            except Exception as e:
-                logger.error(f"Capability handler error: {e}")
-                continue
-        
-        return CapabilityResult(
-            request_id=request.request_id,
-            capability=request.capability,
-            selected_implementation="",
-            success=False,
-            error="All handlers failed",
-            latency_ms=(time.time() - start_time) * 1000
-        )
+        try:
+            result = await handler(request)
+            self._record_routing(request, result)
+            return result
+        except Exception as e:
+            logger.error(f"Capability handler error: {e}")
+            return CapabilityResult(
+                request_id=request.request_id,
+                capability=request.capability,
+                selected_implementation="",
+                success=False,
+                error=f"Handler failed: {e}",
+                latency_ms=(time.time() - start_time) * 1000
+            )
     
     def _record_routing(self, request: CapabilityRequest, result: CapabilityResult) -> None:
         record = {
@@ -283,21 +281,21 @@ DEFAULT_TOOL_CAPABILITIES = {
 
 DEFAULT_AGENT_CAPABILITIES = {    "agent_a": AgentCapability(
         agent_id="agent_a",
-        name="Agent A - Explorer",
-        capabilities=["explore", "research", "hypothesis_generation", "browser_research"],
+        name="Atlas",
+        capabilities=["research", "reasoning", "verification", "execution"],
         preferred_models=["qwen3-8b", "qwen2.5-coder-7b"],
         available_tools=["terminal", "filesystem", "web"]
     ),
     "agent_b": AgentCapability(
         agent_id="agent_b",
-        name="Agent B - Challenger",
-        capabilities=["critique", "verification", "deep_reasoning", "assumption_testing"],
+        name="Argus",
+        capabilities=["research", "reasoning", "verification", "execution"],
         preferred_models=["deepseek-r1-7b", "qwen3-8b"],
         available_tools=["terminal", "filesystem", "web"]
     ),
     "agent_c": AgentCapability(
         agent_id="agent_c",
-        name="Agent C - Observer",
+        name="Observer",
         capabilities=["monitoring", "pattern_detection", "intervention"],
         preferred_models=["qwen3-8b"],
         available_tools=[]

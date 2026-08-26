@@ -20,7 +20,7 @@ from app.agents.observer import create_observer_agent
 from app.orchestration.conversation import ConversationEngine, ConversationConfig
 from app.orchestration.scheduler import create_scheduler
 from app.audio import TTSConfig, STTConfig, create_tts_adapter, create_stt_adapter
-from app.memory import SQLiteStore, MemorySummarizer, MemoryManager
+from app.memory import SQLiteStore, MemorySummarizer, MemoryManager, ContextManager
 from app.tools import ToolGateway, TerminalTool, FilesystemTool, WebTool
 from app.permissions import PermissionManager
 from app.resources import ResourceManager, ResourceThresholds, ResourceLevel
@@ -103,6 +103,14 @@ class SandboxApp:
         summarizer = MemorySummarizer(store, self.model_registry.get(default_model))
         summarizer.set_interval(summarization_interval)
         self.memory_manager = MemoryManager(store, summarizer, self.event_bus, max_entries)
+        
+        self.context_manager = ContextManager(
+            store=store,
+            summarizer=summarizer,
+            event_bus=self.event_bus,
+            max_context_tokens=8192,
+            summarization_interval=summarization_interval
+        )
         
         self.evidence_manager = EvidenceManager(
             db_path="./data/sandbox.db",
@@ -257,13 +265,13 @@ class SandboxApp:
             scheduler_policy=conv_config.get("scheduler_policy", "round_robin")
         )
         
-        self.memory_manager.set_conversation(conversation_config.conversation_id)
+        self.context_manager.set_conversation(conversation_config.conversation_id)
         
         self.conversation_engine = ConversationEngine(
             config=conversation_config,
             agents=agents,
             event_bus=self.event_bus,
-            memory_manager=self.memory_manager
+            context_manager=self.context_manager
         )
         
         self.conversation_engine.add_turn_callback(self._on_turn)
@@ -393,7 +401,7 @@ class SandboxApp:
     
     def _on_turn(self, message) -> None:
         print(f"\n{'='*60}")
-        print(f"[{message.role.value.upper()}] Turn {message.turn_number}")
+        print(f"[{message.agent_identity.upper()}] Turn {message.turn_number}")
         print(f"{'='*60}")
         print(message.content)
         print(f"{'='*60}\n")

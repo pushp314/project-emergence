@@ -152,14 +152,16 @@ async def _interactive_sandbox(config_path: str):
 
 
 def _on_turn_display(message):
-    role_colors = {
+    identity_colors = {
+        "atlas": "cyan",
+        "argus": "magenta",
         "explorer": "cyan",
         "challenger": "magenta",
         "observer": "yellow",
         "human": "green"
     }
-    color = role_colors.get(message.role.value, "white")
-    console.print(f"[bold {color}][{message.role.value.upper()}][/bold {color}] Turn {message.turn_number}")
+    color = identity_colors.get(message.agent_identity, "white")
+    console.print(f"[bold {color}][{message.agent_identity.upper()}][/bold {color}] Turn {message.turn_number}")
     console.print(message.content)
     console.print()
 

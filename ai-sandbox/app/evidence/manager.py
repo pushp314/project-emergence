@@ -15,7 +15,7 @@ from app.events.bus import EventBus, Event, EventType, get_event_bus
 from app.evidence.schemas import (
     Evidence, EvidenceType, Source, Claim, ClaimType,
     ResearchSession, Experiment, Decision, Artifact,
-    ModificationRecord, VerificationStatus
+    ModificationRecord, VerificationStatus, IntentActionStage, IntentActionRecord
 )
 
 logger = logging.getLogger(__name__)
@@ -240,6 +240,20 @@ class EvidenceManager:
                 
                 CREATE INDEX IF NOT EXISTS idx_metrics_session ON resource_metrics(session_id);
                 CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON resource_metrics(timestamp);
+                
+                CREATE TABLE IF NOT EXISTS intent_action_stages (
+                    record_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    agent_id TEXT NOT NULL,
+                    correlation_id TEXT NOT NULL,
+                    stage TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    content TEXT,
+                    metadata TEXT
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_ias_session ON intent_action_stages(session_id);
+                CREATE INDEX IF NOT EXISTS idx_ias_correlation ON intent_action_stages(correlation_id);
             """)
             conn.commit()
     
@@ -271,6 +285,10 @@ class EvidenceManager:
             EventType.SYSTEM_STOP,
             EventType.HUMAN_INTERRUPT,
             EventType.HUMAN_MESSAGE,
+            EventType.emergence_observed,
+            EventType.agent_self_assessment,
+            EventType.agent_role_change,
+            EventType.agent_disagreement,
         ]
         
         for event_type in event_types:
@@ -335,6 +353,10 @@ class EvidenceManager:
             EventType.SYSTEM_PAUSE: self._handle_system_pause,
             EventType.SYSTEM_RESUME: self._handle_system_resume,
             EventType.SYSTEM_STOP: self._handle_system_stop,
+            EventType.emergence_observed: self._handle_emergence_observed,
+            EventType.agent_self_assessment: self._handle_self_assessment,
+            EventType.agent_role_change: self._handle_role_change,
+            EventType.agent_disagreement: self._handle_disagreement,
         }
         
         handler = handlers.get(event.type)
@@ -575,6 +597,50 @@ class EvidenceManager:
         )
         self._save_evidence(evidence)
     
+    async def _handle_emergence_observed(self, event: Event) -> None:
+        evidence = self._create_evidence(
+            event,
+            EvidenceType.emergence_observed,
+            intent="Emergence observed",
+            reason=f"Emergent behavior detected: {event.payload.get('behavior_type', 'unknown')}",
+            action_details=event.payload,
+            tags=["emergence", "observation"]
+        )
+        self._save_evidence(evidence)
+
+    async def _handle_self_assessment(self, event: Event) -> None:
+        evidence = self._create_evidence(
+            event,
+            EvidenceType.agent_self_assessment,
+            intent="Agent self-assessment",
+            reason=event.payload.get("assessment", ""),
+            action_details=event.payload,
+            tags=["emergence", "self_assessment"]
+        )
+        self._save_evidence(evidence)
+
+    async def _handle_role_change(self, event: Event) -> None:
+        evidence = self._create_evidence(
+            event,
+            EvidenceType.agent_role_change,
+            intent="Agent role change",
+            reason=f"Role changed to {event.payload.get('new_role', 'unknown')}",
+            action_details=event.payload,
+            tags=["emergence", "role_change"]
+        )
+        self._save_evidence(evidence)
+
+    async def _handle_disagreement(self, event: Event) -> None:
+        evidence = self._create_evidence(
+            event,
+            EvidenceType.agent_disagreement,
+            intent="Agent disagreement",
+            reason=f"Disagreement on {event.payload.get('topic', 'unknown')}",
+            action_details=event.payload,
+            tags=["emergence", "disagreement", "conflict"]
+        )
+        self._save_evidence(evidence)
+    
     async def _create_session_record(self, session_id: str) -> None:
         import subprocess
         try:
@@ -743,6 +809,22 @@ class EvidenceManager:
             ))
             conn.commit()
     
+    def record_intent_action_stage(self, record: IntentActionRecord) -> None:
+        if not self._session_id:
+            return
+            
+        with self._get_conn() as conn:
+            conn.execute("""
+                INSERT INTO intent_action_stages (record_id, session_id, agent_id, correlation_id,
+                                                 stage, timestamp, content, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                record.record_id, record.session_id, record.agent_id,
+                record.correlation_id, record.stage.value, record.timestamp,
+                record.content, json.dumps(record.metadata)
+            ))
+            conn.commit()
+
     def record_claim(self, claim: Claim) -> None:
         with self._get_conn() as conn:
             conn.execute("""

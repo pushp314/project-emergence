@@ -39,6 +39,16 @@ class EvidenceType(str, Enum):
     agent_disagreement = "agent_disagreement"
 
 
+class IntentActionStage(str, Enum):
+    SENSE = "sense"
+    CATEGORIZE = "categorize"
+    INTEND = "intend"
+    PLAN = "plan"
+    ACT = "act"
+    OBSERVE = "observe"
+    LEARN = "learn"
+
+
 class VerificationStatus(str, Enum):
     PENDING = "pending"
     VERIFIED = "verified"
@@ -74,6 +84,18 @@ class Evidence:
     permission_id: Optional[str] = None
     artifacts: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class IntentActionRecord:
+    record_id: str = field(default_factory=lambda: f"IAR-{uuid.uuid4().hex[:8]}")
+    session_id: str = ""
+    agent_id: str = ""
+    correlation_id: str = ""
+    stage: IntentActionStage = IntentActionStage.SENSE
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    content: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

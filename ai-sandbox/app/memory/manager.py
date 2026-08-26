@@ -4,9 +4,9 @@ from typing import Any, Dict, List, Optional
 import logging
 import uuid
 from datetime import datetime
-
 from app.memory.store import SQLiteStore, ConversationRecord, MemoryRecord
 from app.memory.summarizer import MemorySummarizer
+from app.memory.context_manager import ContextManager, ContextSnapshot, ContextBudget, ContextState
 from app.events.schemas import AgentMessage, MemoryEntry, ConversationSummary
 from app.events.bus import EventBus, EventType, get_event_bus
 
@@ -25,6 +25,13 @@ class MemoryManager:
         self.summarizer = summarizer
         self.event_bus = event_bus or get_event_bus()
         self.max_entries = max_entries
+        self.context_manager = ContextManager(
+            store=self.store,
+            summarizer=self.summarizer,
+            event_bus=self.event_bus,
+            max_context_tokens=8192,
+            summarization_interval=self._summarization_interval if hasattr(self, '_summarization_interval') else 10
+        )
         self._conversation_id: Optional[str] = None
     
     def set_conversation(self, conversation_id: str) -> None:
@@ -43,7 +50,7 @@ class MemoryManager:
             conversation_id=self._conversation_id,
             turn_number=message.turn_number,
             agent_id=message.agent_id,
-            role=message.role.value,
+            role=message.agent_identity,
             content=message.content,
             timestamp=message.timestamp,
             metadata=message.metadata

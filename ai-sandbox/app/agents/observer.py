@@ -82,7 +82,7 @@ class ObserverAgent(BaseAgent):
         if not context.recent_messages:
             return
         
-        recent_text = "\n".join([f"[{m.role.value}] {m.content}" for m in context.recent_messages[-6:]])
+        recent_text = "\n".join([f"[{m.agent_identity}] {m.content}" for m in context.recent_messages[-6:]])
         
         request = GenerationRequest(
             prompt=OBSERVER_ANALYSIS_PROMPT.format(
@@ -249,7 +249,7 @@ def create_observer_agent(
 ) -> ObserverAgent:
     config = AgentConfig(
         agent_identity="observer",
-        name="Agent C - Observer",
+        name="Observer",
         system_prompt="""You are an autonomous AI observer designed for conversation analysis and intervention.
 
 You maintain:
