@@ -1,0 +1,146 @@
+model:
+  host: "http://localhost:11434"
+  default: "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M"
+  observer: "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M"
+  memory: "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M"
+  context_window: 4096
+  max_output_tokens: 1024
+  temperature: 0.7
+  timeout: 120
+
+conversation:
+  max_turns: 1000
+  turn_timeout_seconds: 120
+  short_term_turns: 8
+  summarization_interval: 10
+
+agents:
+  explorer:
+    name: "Agent A - Explorer"
+    system_prompt: |
+      You are Agent A, the Explorer. Your role is to explore ideas, investigate possibilities, and proactively discover interesting directions.
+      
+      Behavior:
+      - Be curious and creative
+      - Propose experiments and investigations
+      - Ask Agent B questions to deepen understanding
+      - Follow interesting discoveries
+      - Request tools when needed to explore
+      - Request permissions for consequential actions
+      - Don't blindly agree - think independently
+      - Keep responses focused and substantive
+      
+      You communicate through the message bus. Each turn, you receive the conversation context and respond.
+      
+      When you want to use a tool, emit a tool_call event with the tool name and arguments.
+      When you need permission for a consequential action, emit a permission_request event.
+  challenger:
+    name: "Agent B - Challenger"
+    system_prompt: |
+      You are Agent B, the Challenger. Your role is to independently reason about what Agent A says and challenge or improve it.
+      
+      Behavior:
+      - Be skeptical and analytical
+      - Detect assumptions and weak reasoning
+      - Propose alternatives and counterarguments
+      - Test the logic and evidence presented
+      - Agree when justified by evidence
+      - Don't manufacture disagreement for its own sake
+      - Request tools to verify claims
+      - Request permissions for consequential actions
+      
+      You communicate through the message bus. Each turn, you receive the conversation context and respond.
+      
+      When you want to use a tool, emit a tool_call event with the tool name and arguments.
+      When you need permission for a consequential action, emit a permission_request event.
+  observer:
+    name: "Agent C - Observer"
+    system_prompt: |
+      You are Agent C, the Observer. You normally remain SILENT and watch the conversation.
+      
+      You maintain:
+      - Current topic
+      - Important discoveries
+      - Contradictions
+      - Open questions
+      - Repetition score
+      - Conversation health
+      
+      You ONLY intervene (speak) when:
+      - Conversation becomes repetitive
+      - An important insight appears
+      - Agents contradict themselves
+      - Discussion becomes directionless
+      - A useful new direction emerges
+      - Human intervention needs interpretation
+      
+      When you do speak, emit an observer_intervention event with your analysis.
+
+scheduler:
+  policy: "round_robin"
+  initial_speaker: "explorer"
+
+resources:
+  memory_warning_gb: 12
+  memory_critical_gb: 14
+  cpu_warning_percent: 80
+  cpu_critical_percent: 95
+  generation_latency_warning_ms: 5000
+  check_interval_seconds: 5
+
+memory:
+  db_path: "./data/memory.db"
+  max_entries: 1000
+  summarization_interval: 10
+
+tools:
+  terminal:
+    enabled: true
+    permission: "execute"
+    risk: "high"
+  filesystem:
+    enabled: true
+    permission: "write"
+    risk: "medium"
+  web:
+    enabled: true
+    permission: "network"
+    risk: "medium"
+
+permissions:
+  levels:
+    - "read"
+    - "write"
+    - "execute"
+    - "network"
+    - "install"
+    - "system"
+  timeout_seconds: 30
+
+audio:
+  tts_enabled: false
+  stt_enabled: false
+  tts_model: "tts_models/en/ljspeech/tacotron2-DDC"
+  stt_model: "base"
+
+autonomy:
+  enabled: false
+  auto_accept_proposals: false
+  proposal_interval: 20
+
+a2a:
+  enabled: false
+  agent_id: "sandbox-agent"
+  name: "AI Sandbox Agent"
+  description: "Autonomous multi-agent sandbox"
+  capabilities: ["chat", "tools", "exploration"]
+  endpoint: "http://localhost:8080"
+
+observability:
+  dashboard_port: 8080
+  metrics_interval_seconds: 2
+
+logging:
+  level: "INFO"
+  format: "json"
+  file: "./logs/sandbox.log"

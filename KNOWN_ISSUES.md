@@ -1,0 +1,143 @@
+# Known Issues
+
+## CRITICAL
+None
+
+## HIGH
+None
+
+## MEDIUM
+
+### Issue: Ollama Connector Closed During Shutdown
+- **Observed:** `aiohttp.client.ClientSession` errors during shutdown when agents still have pending streaming requests
+- **Severity:** MEDIUM (non-fatal, cleanup issue)
+- **Expected:** Clean shutdown without connector errors
+- **Reproduction:** Run `python -m app start`, wait for 1-2 turns, press Ctrl+C
+- **Likely Cause:** Model registry closes session before conversation engine fully stops
+- **Workaround:** None needed - non-fatal
+- **Proposed Fix:** Add graceful shutdown sequence: stop conversation → wait for in-flight requests → close model registry
+- **Status:** Open
+
+### Issue: State Machine Invalid Transitions During Rapid Shutdown
+- **Observed:** `Invalid transition: GRACEFUL_SHUTDOWN -> SPEAKING` warnings
+- **Severity:** MEDIUM (non-fatal, logging noise)
+- **Expected:** State machine should reject or ignore transitions after GRACEFUL_SHUTDOWN
+- **Reproduction:** Rapid Ctrl+C during agent generation
+- **Likely Cause:** Conversation engine continues processing after shutdown signal
+- **Workaround:** None needed - state machine correctly rejects
+- **Proposed Fix:** Add shutdown flag check in _process_turn before state transitions
+- **Status:** Open
+
+---
+
+## LOW
+
+### Issue: Agent ID "unknown" in Some Evidence Records
+- **Observed:** Some evidence records show `agent_id: "unknown"`
+- **Severity:** LOW (cosmetic, doesn't affect functionality)
+- **Expected:** All evidence should have correct agent ID
+- **Reproduction:** System events (pause/resume/stop) don't have agent_id in payload
+- **Likely Cause:** System events don't include agent_id
+- **Workaround:** Filter by evidence_type when querying
+- **Proposed Fix:** Add "system" as agent_id for system events
+- **Status:** Open
+
+### Issue: Resource Metrics Not Persisted
+- **Observed:** resource_metrics table remains empty
+- **Severity:** LOW (feature gap)
+- **Expected:** Periodic resource metrics persisted for historical analysis
+- **Reproduction:** Check resource_metrics table after running
+- **Likely Cause:** ResourceManager doesn't call evidence_manager.record_resource_metrics
+- **Proposed Fix:** Add periodic metric recording to ResourceManager
+- **Status:** Open
+
+### Issue: Observer Agent Not Triggering Interventions
+- **Observed:** Observer agent never speaks despite configured to intervene
+- **Severity:** LOW (feature gap)
+- **Expected:** Observer should intervene on repetition, contradictions, low health
+- **Reproduction:** Run long conversation, check for observer interventions
+- **Likely Cause:** Observer intervention logic not triggered correctly
+- **Proposed Fix:** Debug observer evaluation logic, add intervention triggers
+- **Status:** Open
+
+### Issue: Web Tool Search Limited to DuckDuckGo HTML
+- **Observed:** Web search only uses DuckDuckGo HTML scraping
+- **Severity:** LOW (functional limitation)
+- **Expected:** Multiple search backends, better result parsing
+- **Likely Cause:** Simple implementation for MVP
+- **Proposed Fix:** Add multiple search providers, improve result extraction
+- **Status:** Open
+
+---
+
+## DESIGN DEBT
+
+### Issue: No Database Migrations Framework
+- **Observed:** Schema changes require manual SQL
+- **Severity:** DESIGN DEBT
+- **Proposed Fix:** Add simple migration system with versioned SQL files
+- **Status:** Planned
+
+### Issue: No Vector Database for Semantic Memory Search
+- **Observed:** Memory retrieval uses SQLite FTS/structured queries only
+- **Severity:** DESIGN DEBT (may be sufficient for current scale)
+- **Proposed Fix:** Evaluate need after scale testing; add pgvector/FAISS if needed
+- **Status:** Deferred
+
+### Issue: No Automated Test Suite
+- **Observed:** Only manual CLI testing performed
+- **Severity:** DESIGN DEBT
+- **Proposed Fix:** Add pytest suite for all components
+- **Status:** Planned
+
+### Issue: Hardcoded Model Capabilities
+- **Observed:** DEFAULT_MODEL_CAPABILITIES defined in registry.py
+- **Severity:** DESIGN DEBT
+- **Proposed Fix:** Load from config file or model metadata
+- **Status:** Planned
+
+### Issue: No Structured Logging (JSONL)
+- **Observed:** Logging uses human-readable format
+- **Severity:** DESIGN DEBT
+- **Proposed Fix:** Add JSONL structured logging for Evidence Plane
+- **Status:** Planned
+
+---
+
+## PERFORMANCE
+
+### Issue: Model Loading/Unloading Not Implemented
+- **Observed:** All models stay loaded in Ollama
+- **Severity:** PERFORMANCE (memory usage)
+- **Expected:** Load on demand, unload after cooldown
+- **Proposed Fix:** Implement model loading policy in ResourceManager
+- **Status:** Open
+
+### Issue: No Prompt Caching
+- **Observed:** Repeated system prompts sent every turn
+- **Severity:** PERFORMANCE (token waste)
+- **Proposed Fix:** Implement prompt caching in ModelAdapter
+- **Status:** Planned
+
+---
+
+## SECURITY
+
+### Issue: Terminal Tool Allows Arbitrary Commands
+- **Observed:** Terminal tool has blocked_commands list but allowlist is optional
+- **Severity:** SECURITY (if allowlist not configured)
+- **Expected:** Secure by default with allowlist
+- **Proposed Fix:** Make allowlist required, block by default
+- **Status:** Open
+
+### Issue: Web Tool Can Access Localhost
+- **Observed:** blocked_domains includes localhost but allowlist is optional
+- **Severity:** SECURITY (SSRF risk)
+- **Proposed Fix:** Block private IPs by default, require explicit allowlist
+- **Status:** Open
+
+### Issue: Filesystem Tool Base Path Not Enforced for Symlinks
+- **Observed:** Symlink resolution could escape base path
+- **Severity:** SECURITY
+- **Proposed Fix:** Resolve symlinks and verify within base path
+- **Status:** Open
