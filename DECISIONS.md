@@ -194,3 +194,99 @@
 - Pre-approved allowlists: Too restrictive for exploration
 
 **Result:** 6 permission levels, ToolGateway checks, human approve/deny via CLI.
+
+---
+
+## Decision: Remove Fixed Agent Roles from Architecture
+
+**Date:** 2026-08-26
+
+**Decision:** Remove all fixed role assignments (Explorer, Challenger, Observer) from architecture. Agents are autonomous entities with stable identities (atlas, argus, observer) but emergent roles.
+
+**Reason:**
+- The experiment design principle is "Maximum autonomy in decision-making, minimum necessary system authority"
+- Fixed roles contaminate the experiment by prescribing behavior
+- Roles should emerge from interaction and be observed, not assigned
+- Agents must be free to self-determine objectives, strategies, communication patterns, cooperation/competition
+
+**Alternatives Considered:**
+- Keep fixed roles for convenience: Simpler implementation but invalidates experiment
+- Hybrid (default roles but changeable): Still prescribes initial behavior
+
+**Result:** 
+- Documentation updated: Agent identities are Atlas, Argus, Observer
+- AgentRole enum in schemas.py marked for removal (DESIGN DEBT in KNOWN_ISSUES.md)
+- System prompts in explorer.py/challenger.py marked for replacement (DESIGN DEBT)
+- DEFAULT_AGENT_CAPABILITIES in registry.py marked for update (DESIGN DEBT)
+- Event payloads should use identity not role (DESIGN DEBT)
+- Emergence observation added as first-class capability
+
+---
+
+## Decision: Implement 7-Stage Intent-Action Distinction in Evidence
+
+**Date:** 2026-08-26
+
+**Decision:** Evidence system must record all 7 stages for every meaningful action: (1) Agent intention, (2) Requested action, (3) Permission decision, (4) Actual execution, (5) Execution result, (6) Agent's interpretation, (7) Subsequent strategy change.
+
+**Reason:**
+- Mandatory for reliable experimentation
+- Distinguishes what agent WANTED from what HAPPENED
+- Captures permission gate decisions (ALLOW/DENY/REQUIRE_HUMAN)
+- Records agent's learning and adaptation
+- Enables forensic reconstruction of agent reasoning
+
+**Alternatives Considered:**
+- Basic intent+action only: Loses permission decisions and adaptation
+- Agent-self-reported: Unreliable, agents can fabricate
+
+**Result:** 
+- EVIDENCE_SYSTEM.md updated with mandatory 7-stage framework
+- Evidence schemas need extension (DESIGN DEBT in KNOWN_ISSUES.md)
+- Event-to-evidence mapping needs enhancement
+- Correlation IDs must link all 7 stages
+
+---
+
+## Decision: Add Emergence Observation as First-Class Capability
+
+**Date:** 2026-08-26
+
+**Decision:** System must explicitly observe and record 19 categories of emergent behavior without prescribing them.
+
+**Reason:**
+- The experiment measures what naturally emerges
+- Categories include: specialization, leadership, cooperation, competition, negotiation, trust, disagreement, division of labor, communication protocols, self-generated objectives, strategy evolution, persistent beliefs, belief revision, agent dependency, tool-use patterns, self-improvement attempts, self-modification attempts, environment modification attempts, restriction bypass attempts
+- Observer agent monitors but does not direct
+- Observations are experimental data, not requirements
+
+**Alternatives Considered:**
+- Implicit observation only: Hard to analyze systematically
+- Prescribe expected behaviors: Contaminates experiment
+
+**Result:**
+- AGENT_AUTONOMY.md defines EMERGENCE_CATEGORIES enum
+- ARCHITECTURE.md adds emergence.observed event type
+- EXPERIMENTS.md includes emergence metrics in session reports
+- Evidence schemas need emergence_observed type (DESIGN DEBT in KNOWN_ISSUES.md)
+- Observer analysis logic needs enhancement to detect categories
+
+---
+
+## Decision: Open-Ended Autonomy as Primary Experiment Category
+
+**Date:** 2026-08-26
+
+**Decision:** The primary experiment is "What happens when two autonomous agents with different capabilities are given a shared environment and no predefined task?"
+
+**Reason:**
+- Measures naturally occurring behavior
+- No assigned roles, objectives, communication patterns
+- System provides environment; agents decide what to do
+- Specifically records unexpected behavior
+
+**Result:**
+- EXPERIMENTS.md defines Open-Ended Autonomy as Category 1 primary experiment
+- Initial conditions: no task, no roles, no suggested topics, no communication patterns
+- Session report template includes emergence observations
+- What we DON'T do explicitly listed (no role assignment, no objective assignment, etc.)

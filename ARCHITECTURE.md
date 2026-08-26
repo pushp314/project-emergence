@@ -1,265 +1,230 @@
-Absolutely. Since you're going to hand this specification to a coding agent, the architecture should be **implementation-ready**, not just a conceptual diagram.
-
-The core objective is:
-
-> **Build a local autonomous multi-agent sandbox on an M4 Mac with 16 GB RAM. Two independent agents can converse indefinitely, explore the environment, use tools, request permissions from the human, and learn from the conversation. A third observer monitors the system. The system must aggressively manage CPU/RAM/thermal load so the Mac remains responsive.**
-
 # Autonomous AI Sandbox — Engineering Specification
 
-## 1. Core architecture
+## 1. CORE OBJECTIVE
+
+> **Build a local autonomous multi-agent sandbox on an M4 Mac with 16 GB RAM. Two autonomous agents can converse indefinitely, explore the environment, use tools, request permissions from the human, and learn from the conversation. The system observes and documents the emergence of their behaviors. The system must aggressively manage CPU/RAM/thermal load so the Mac remains responsive.**
+
+---
+
+## 2. SYSTEM OVERVIEW
 
 ```text
-                         HUMAN
-                    ┌──────┴──────┐
-                    │             │
-                 Listen        Interrupt
-                    │             │
-                    └──────┬──────┘
-                           ↓
-                ┌─────────────────────┐
-                │  CONTROL PLANE      │
-                │ Conversation Engine │
-                │ Scheduler            │
-                │ Permission Gateway   │
-                │ Resource Manager     │
-                └──────────┬──────────┘
-                           │
-                    EVENT / MESSAGE BUS
-                           │
-          ┌────────────────┼────────────────┐
-          ↓                ↓                ↓
-      ┌────────┐       ┌────────┐       ┌────────┐
-      │Agent A │ ←───→ │Agent B │ ←───→ │Agent C │
-      │Explorer│       │Critic  │       │Observer│
-      └────┬───┘       └────┬───┘       └────┬───┘
-           │                │                │
-           └────────────────┼────────────────┘
+                          HUMAN
+                     ┌──────┴──────┐
+                     │             │
+                  Listen        Interrupt
+                     │             │
+                     └──────┬──────┘
                             ↓
-                     TOOL GATEWAY
+                 ┌─────────────────────┐
+                 │   CONTROL PLANE      │
+                 │ Conversation Engine  │
+                 │ Scheduler            │
+                 │ Permission Gateway   │
+                 │ Resource Manager     │
+                 └──────────┬──────────┘
                             │
-       ┌────────────────────┼────────────────────┐
-       ↓                    ↓                    ↓
-   Terminal             Filesystem             Web
-       │                    │                    │
-       └────────────────────┼────────────────────┘
-                            ↓
-                           macOS
+                     EVENT / MESSAGE BUS
+                            │
+           ┌────────────────┼────────────────┐
+           ▼                ▼                ▼
+       ┌────────┐       ┌────────┐       ┌────────┐
+       │ Atlas  │ ←───→  │ Argus  │ ←───→  │Observer│
+       │(Agent) │        │(Agent) │        │(Agent) │
+       └────┬───┘       └────┬───┘       └────┬───┘
+            │                │                │
+            └────────────────┼────────────────┘
+                             ▼
+                      TOOL GATEWAY
+                             │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+     Terminal             Filesystem             Web
+         │                    │                    │
+         └────────────────────┼────────────────────┘
+                             ▼
+                            macOS
 
-                 ┌──────────────────┐
-                 │ MODEL RUNTIME    │
-                 │ Ollama / Adapter │
-                 └──────────────────┘
+                  ┌──────────────────┐
+                  │  MODEL RUNTIME   │
+                  │  Ollama / Adapter│
+                  └──────────────────┘
 
-                 ┌──────────────────┐
-                 │ MEMORY SYSTEM    │
-                 │ State + Summary  │
-                 └──────────────────┘
+                  ┌──────────────────┐
+                  │  MEMORY SYSTEM   │
+                  │  State + Summary │
+                  └──────────────────┘
+
+                  ┌──────────────────┐
+                  │  EVIDENCE PLANE  │
+                  │ Intent + Action  │
+                  └──────────────────┘
 ```
 
 ---
 
-# 2. Separate the system into five planes
-
-This is important for maintainability.
+## 3. FIVE PLANES
 
 ### Control Plane
-
 Responsible for:
-
-* starting/stopping agents
-* scheduling turns
-* handling interruptions
-* permission requests
-* resource management
-* graceful shutdown
+- Starting/stopping agents
+- Scheduling turns
+- Handling interruptions
+- Permission requests
+- Resource management
+- Graceful shutdown
 
 ### Agent Plane
+Contains autonomous agents:
+- **Atlas** — Autonomous agent (identity: `atlas`)
+- **Argus** — Autonomous agent (identity: `argus`)  
+- **Observer** — Optional monitoring agent (identity: `observer`)
 
-Contains:
+**Agents do NOT have fixed roles.** Their roles, objectives, and strategies emerge from interaction.
 
-* Agent A
-* Agent B
-* Observer Agent
-
-Agents should **not control the infrastructure directly**.
+Agents should **not control infrastructure directly**.
 
 ### Tool Plane
-
-Provides:
-
-* terminal
-* filesystem
-* browser/search
-* code execution
-* other tools later
+Provides capabilities:
+- Terminal
+- Filesystem
+- Browser/Web search
+- Code execution
+- Future tools
 
 ### Memory Plane
-
 Stores:
-
-* conversation
-* summaries
-* important discoveries
-* pending questions
-* agent state
-* permission history
+- Conversation history
+- Summaries
+- Important discoveries
+- Pending questions
+- Agent state
+- Permission history
 
 ### Model Plane
-
-Abstracts the actual LLM.
-
-```text
+Abstracts the actual LLM:
+```
 Agent
- ↓
-ModelAdapter
- ↓
-Ollama
- ↓
-Qwen / GPT-OSS / whatever
+  ↓
+Capability Request
+  ↓
+Capability Registry
+  ↓
+Model Adapter
+  ↓
+Ollama / Local LLM
 ```
 
-Changing models should require **zero changes to the agent architecture**.
+Changing models requires **zero changes to agent architecture**.
+
+### Evidence Plane
+Independently records all events with **intent + action** distinction.
+See [EVIDENCE_SYSTEM.md](EVIDENCE_SYSTEM.md).
 
 ---
 
-# 3. Agent design
+## 4. AGENT DESIGN — AUTONOMOUS AGENTS
 
-## Agent A — Explorer
+Agents are **autonomous reasoning processes** with:
 
-Purpose:
+- **Identity** — Stable identifier (`atlas`, `argus`, `observer`)
+- **Memory** — Access to conversation history, summaries, discoveries
+- **Capabilities** — Tools, models, delegations via Capability Registry
+- **Permissions** — Request via Permission Gateway
+- **Resources** — Constrained by Resource Manager
+- **Communication** — Event Bus (no direct calls)
+- **Self-Determination** — Decide what to do, when, how
 
-> Explore ideas, investigate possibilities and proactively discover interesting directions.
+### Agent Decision Loop
 
-Behavior:
-
-* curious
-* creative
-* proposes experiments
-* asks Agent B questions
-* follows interesting discoveries
-* can request tools
-* can request permissions
-* shouldn't blindly agree
-
----
-
-## Agent B — Challenger
-
-Purpose:
-
-> Independently reason about what Agent A says and challenge or improve it.
-
-Behavior:
-
-* skeptical
-* analytical
-* detects assumptions
-* proposes alternatives
-* tests reasoning
-* agrees when justified
-* doesn't manufacture disagreement
-
----
-
-## Agent C — Observer
-
-Agent C should normally remain **silent**.
-
-It watches the conversation and maintains:
-
-```text
-Current topic
-Important discoveries
-Contradictions
-Open questions
-Repetition score
-Conversation health
+```
+OBSERVE
+  ↓
+UNDERSTAND (context, memory, other agents, resources)
+  ↓
+PLAN (what do I want to achieve?)
+  ↓
+IDENTIFY NEED (what capability do I need?)
+  ↓
+DISCOVER CAPABILITY (query Capability Registry)
+  ↓
+SELECT (choose model/tool/agent)
+  ↓
+REQUEST (capability request → Permission Gate → Resource Gate)
+  ↓
+EXECUTE
+  ↓
+OBSERVE RESULT
+  ↓
+EVALUATE (was it useful? what did I learn?)
+  ↓
+DECIDE NEXT ACTION
 ```
 
-It can intervene when:
-
-* conversation becomes repetitive
-* an important insight appears
-* agents contradict themselves
-* discussion becomes directionless
-* a useful new direction emerges
-* human intervention needs interpretation
+Agents **decide WHAT they need**. Infrastructure decides **WHETHER** and **HOW**.
 
 ---
 
-# 4. Don't use direct agent-to-agent calls
+## 4. EVENT-DRIVEN COMMUNICATION
 
-Use an event bus.
+Agents communicate **only** through the Event Bus.
 
-```text
-Agent A
-   │
-   ▼
-Message Bus
-   │
-   ├──→ Agent B
-   ├──→ Observer
-   ├──→ Memory
-   └──→ Logger
-```
-
-Example event:
-
+### Event Structure
 ```json
 {
   "event_id": "uuid",
-  "type": "agent_message",
+  "type": "agent.message",
   "conversation_id": "uuid",
-  "speaker": "agent_a",
-  "content": "I think distributed inference...",
-  "timestamp": "...",
+  "speaker": "atlas",
+  "content": "I want to research distributed inference.",
+  "timestamp": "2026-08-26T10:30:00Z",
   "metadata": {
-    "model": "configured_model",
+    "intent": "research distributed inference",
+    "model": "qwen2.5-coder-7b",
     "tokens": 120
   }
 }
 ```
 
-This makes the architecture extensible.
-
-Later:
-
-```text
-Agent D
-Researcher
-Agent E
-Coder
-Agent F
-Scientist
-```
-
-can subscribe to the same events.
+### Key Event Types
+| Category | Events |
+|----------|--------|
+| Agent | `agent.message`, `agent.thinking_started`, `agent.response_completed`, `agent.delegation`, `agent.delegation.response`, `agent.self_assessment`, `agent.role_change`, `agent.disagreement` |
+| Human | `human.message`, `human.interrupt` |
+| Tool | `tool.request`, `tool.started`, `tool.completed`, `tool.failed` |
+| Browser | `browser.search`, `browser.page_opened`, `browser.content_extracted` |
+| Permission | `permission.requested`, `permission.approved`, `permission.denied` |
+| Memory | `memory.updated` |
+| Experiment | `experiment.started`, `experiment.completed`, `experiment.failed` |
+| Evidence | `evidence.created`, `emergence.observed` |
+| Observer | `observer.intervention` |
+| Resource | `resource.warning`, `resource.critical` |
+| System | `system.pause`, `system.resume`, `system.stop` |
 
 ---
 
-# 5. Conversation algorithm
+## 5. CONVERSATION ALGORITHM
 
-The system should use a **state machine**, not a simple infinite `while` loop.
+State machine (not infinite loop):
 
-```text
+```
 IDLE
- ↓
+  ↓
 THINKING
- ↓
+  ↓
 GENERATING
- ↓
+  ↓
 SPEAKING
- ↓
+  ↓
 OBSERVING
- ↓
+  ↓
 NEXT_TURN
- ↓
+  ↓
 THINKING
 ```
 
-At any point:
-
-```text
+Interrupts at any state:
+```
 ANY STATE
    ↓
 HUMAN_INTERRUPT
@@ -272,8 +237,7 @@ RESUME
 ```
 
 And:
-
-```text
+```
 ANY STATE
    ↓
 STOP
@@ -283,260 +247,139 @@ GRACEFUL_SHUTDOWN
 
 ---
 
-# 6. Turn scheduling
+## 6. TURN SCHEDULING
 
-Default:
+Default: **RoundRobin** (A → B → A → B...)
 
-```text
-A → B → A → B → ...
-```
+Configurable policies:
+- `RoundRobin` — Strict alternation
+- `Adaptive` — Balance based on participation
+- `Debate` — Challenger gets extra turns
+- `Research` — Explorer gets more turns
+- `HumanPriority` — Human input gets priority
+- `ObserverTriggered` — Observer decides next speaker
 
-But don't hard-code this.
-
-Create:
-
-```python
-TurnPolicy
-```
-
-Possible future policies:
-
-```text
-RoundRobin
-Adaptive
-Debate
-Research
-HumanPriority
-ObserverTriggered
-```
-
-For V1 use **RoundRobin**.
+For V1: **RoundRobin**.
 
 ---
 
-# 7. Infinite conversation ≠ infinite context
+## 7. INFINITE CONVERSATION ≠ INFINITE CONTEXT
 
-This is one of the most important engineering problems.
+**Never** send entire conversation to LLM.
 
-Never do:
-
-```text
-entire conversation → LLM
+```
+MEMORY
+   │
+   ├────────────┼────────────┐
+   ▼            ▼            ▼
+Recent turns  Summary    Important facts
+   │            │            │
+   └────────────┼────────────┘
+                ▼
+         Context Builder
+                ▼
+               LLM
 ```
 
-Instead:
-
-```text
-                 MEMORY
-                    │
-       ┌────────────┼────────────┐
-       ↓            ↓            ↓
- Recent turns    Summary     Important facts
-       │            │            │
-       └────────────┼────────────┘
-                    ↓
-              Context Builder
-                    ↓
-                   LLM
-```
-
-Maintain:
-
-### Short-term memory
-
-Last ~6–12 relevant exchanges.
-
-### Long-term summary
-
-Compressed history.
-
-### Knowledge memory
-
-Important facts/discoveries.
-
-### Open questions
-
-Things the agents haven't resolved.
+- **Short-term**: Last 6-12 exchanges
+- **Long-term**: Compressed summaries
+- **Knowledge**: Important facts/discoveries
+- **Open questions**: Unresolved items
 
 ---
 
-# 8. Memory compression algorithm
+## 8. MEMORY COMPRESSION
 
 Every N turns:
-
-```text
+```
 Conversation buffer
        ↓
-Memory summarizer
+Memory Summarizer (LLM)
        ↓
-Extract:
- ├── important facts
- ├── ideas
- ├── decisions
- ├── unresolved questions
- └── current topic
+Extract: facts, ideas, decisions, questions, topic
        ↓
-Persistent memory
+Persistent Memory
 ```
 
-Do not summarize every turn.
-
-That wastes compute.
+Do NOT summarize every turn — wastes compute.
 
 ---
 
-# 9. Human permission architecture
+## 9. HUMAN PERMISSION ARCHITECTURE
 
-This is a major feature.
+Agents can **request any capability**, but consequential actions go through Permission Gateway.
 
-Agents can **request any capability**, but consequential actions go through the permission gateway.
-
-Example:
-
-```json
-{
-  "type": "permission_request",
-  "agent": "agent_a",
-  "action": "install_software",
-  "command": "brew install nmap",
-  "reason": "I want to investigate...",
-  "risk": "modifies installed software",
-  "scope": "system",
-  "duration": "once"
-}
+### Permission Levels
+```
+READ → WRITE → EXECUTE → NETWORK → INSTALL → SYSTEM
 ```
 
-UI:
-
-```text
-┌──────────────────────────────────────┐
-│ PERMISSION REQUEST                   │
-│                                      │
-│ Agent: A                             │
-│ Action: Install nmap                 │
-│                                      │
-│ Reason:                              │
-│ Investigate network tooling.        │
-│                                      │
-│ Risk: Modifies installed software   │
-│                                      │
-│ [ DENY ]     [ ALLOW ONCE ]         │
-└──────────────────────────────────────┘
+### Request Flow
+```
+Agent Decision
+      ↓
+Capability Request
+      ↓
+Permission Gate
+      ↓
+┌─────┴──────┐
+▼            ▼
+Allowed   Approval Required
+  ↓            ↓
+Execute    Human → Decision
 ```
 
-### Permission levels
-
-```text
-READ
-WRITE
-EXECUTE
-NETWORK
-INSTALL
-SYSTEM
-```
-
-The agent can request higher privileges.
-
-You decide.
+Human approval required for HIGH/CRITICAL risk and INSTALL/SYSTEM scope.
 
 ---
 
-# 10. Never expose raw credentials to the LLM
+## 10. CREDENTIALS — SECRET BROKER
 
-Even though you want autonomy, credentials should be handled through a **secret broker**.
+Never expose raw credentials to LLMs.
 
-Instead of:
-
-```text
-LLM sees API_KEY=abc123
 ```
-
-use:
-
-```text
 Agent
- ↓
+  ↓
 Tool
- ↓
+  ↓
 Secret Manager
- ↓
+  ↓
 External service
 ```
 
-The model only knows:
-
-> "Credential available."
-
-Not the credential itself.
+Model only knows: **"Credential available."** Never the credential itself.
 
 ---
 
-# 11. Tool architecture
+## 11. TOOL ARCHITECTURE
 
-Every tool should have:
-
-```text
+Every tool:
+```
 Tool
 ├── name
 ├── description
-├── input schema
+├── input schema (JSON Schema)
 ├── permission requirement
 ├── risk level
 └── execute()
 ```
 
-Example:
-
-```json
-{
-  "name": "terminal",
-  "permission": "execute",
-  "risk": "high"
-}
-```
-
-The LLM requests:
-
-```text
-tool_call
-```
-
-The Tool Gateway decides:
-
-```text
-Allowed?
- ↓
-No → permission request
-
-Yes → execute
-```
+Tool Gateway enforces:
+1. Permission check before execution
+2. Structured input validation
+3. Structured output
+4. Logging + evidence generation
+5. Error handling
+5. Resource accounting
 
 ---
 
-# 12. macOS resource management — VERY IMPORTANT
+## 12. MACOS RESOURCE MANAGEMENT
 
-Your **M4 16 GB** is the biggest constraint.
+**M4 16 GB is the primary constraint.**
 
-The system must be designed around it from the beginning.
-
-Do **not** design:
-
-```text
-Agent A LLM ┐
-Agent B LLM ├── run simultaneously
-Agent C LLM ┘
-+ TTS
-+ STT
-+ browser
+### Cooperative Scheduling
 ```
-
-That can hammer your Mac.
-
-Instead use **cooperative scheduling**.
-
-### Default
-
-```text
 Agent A
   ↓
 generation
@@ -549,431 +392,268 @@ generation
   ↓
 TTS
 ```
+Observer: event-triggered, not continuous.
 
-Agent C should preferably be **event-triggered**, not constantly generating.
+### Resource Manager
+Monitors: RAM, CPU, GPU, latency, thermal, model memory, queue depth.
 
----
-
-# 13. Resource Manager
-
-Create a dedicated component:
-
-```text
-ResourceManager
+Adjusts:
 ```
-
-It monitors:
-
-```text
-RAM
-CPU
-GPU utilization
-generation latency
-thermal indicators where available
-model memory
-queue length
-```
-
-Then adjusts behavior.
-
-Example:
-
-```text
-NORMAL
- ↓
-full response length
-
-HIGH MEMORY
- ↓
-shorter context
- ↓
-smaller output
-
-HIGH LOAD
- ↓
-pause Observer
- ↓
-reduce generation frequency
-
-CRITICAL
- ↓
-pause conversation
- ↓
-notify human
+NORMAL        → full response length
+HIGH MEMORY   → shorter context, smaller output
+HIGH LOAD     → pause Observer, reduce frequency
+CRITICAL      → pause conversation, notify human
 ```
 
 ---
 
-# 14. Don't run Observer continuously
+## 13. MODEL ROUTING
 
-This is an easy optimization.
+Agents request **capabilities**, not models.
 
-Bad:
-
-```text
-Every message
- ↓
-Observer LLM
- ↓
-Analyze
+```
+Simple task      → small/fast model
+Complex reasoning→ stronger model
+Observer         → small model
+Memory summary   → small model
+Main conversation→ best available model
 ```
 
-Better:
-
-```text
-Every 5–10 turns
-       OR
-repetition detected
-       OR
-major topic change
-       OR
-human asks something
-       ↓
-Observer
-```
-
-This can save a significant amount of inference.
+Capability Registry maps capability → model.
 
 ---
 
-# 15. Model routing
+## 14. GENERATION OPTIMIZATION (M4)
 
-Don't assume every task needs your largest model.
+- Quantized GGUF/Metal-compatible models
+- Moderate context (4096)
+- Bounded output (1024 tokens)
+- Streaming generation
+- Sequential inference (one model at a time)
+- Prompt caching where supported
+- Avoid unnecessary regeneration
+- Model reuse (don't reload)
 
-```text
-Simple task
- ↓
-small/fast model
-
-Complex reasoning
- ↓
-stronger model
-
-Observer
- ↓
-small model
-
-Memory summarization
- ↓
-small model
-
-Main conversation
- ↓
-best available model
-```
-
-This is **model routing**.
-
-Eventually:
-
-```text
-M4
- ↓
-8B model
-
-Remote machine
- ↓
-70B model
-```
-
-without changing your application.
+**Don't chase max context.** Large context = more memory + compute.
 
 ---
 
-# 16. Generation optimization
+## 15. TTS OPTIMIZATION
 
-For your Mac:
-
-Prioritize:
-
-* quantized GGUF/Metal-compatible models
-* moderate context
-* bounded output length
-* streaming generation
-* sequential inference
-* prompt caching where supported
-* avoiding unnecessary regeneration
-* model reuse instead of repeatedly loading/unloading models
-
-Do **not** chase maximum context just because the model supports it.
-
-Large context = more memory + more computation.
-
----
-
-# 17. TTS optimization
-
-TTS can also consume resources.
-
-Use:
-
-```text
+```
 LLM response
- ↓
+  ↓
 stream text
- ↓
+  ↓
 sentence chunker
- ↓
+  ↓
 TTS
- ↓
+  ↓
 audio
 ```
 
-Don't wait for the entire response before speaking.
-
-Example:
-
-```text
-LLM:
-"There's an interesting problem here..."
-
-TTS immediately speaks it.
-
-LLM continues generating.
-```
-
-This makes the system **feel faster** without actually making inference dramatically faster.
+Don't wait for full response. Speak as generated.
 
 ---
 
-# 18. Human interruption must be low latency
+## 16. HUMAN INTERRUPTION
 
-Use:
-
-```text
+```
 Microphone
- ↓
+  ↓
 Voice Activity Detection
- ↓
+  ↓
 STT
- ↓
+  ↓
 Interrupt event
 ```
 
-Don't constantly run a huge speech model.
-
-Use a lightweight local STT engine.
+Lightweight local STT. Not a huge model.
 
 ---
 
-# 19. Event types
+## 17. EVENT TYPES (Complete Registry)
 
-Define a clean event schema from day one:
-
-```text
-agent.message
-agent.started
-agent.completed
-agent.error
-
-human.message
-human.interrupt
-
-tool.request
-tool.started
-tool.completed
-tool.failed
-
-permission.request
-permission.approved
-permission.denied
-
-memory.updated
-
-observer.intervention
-
-resource.warning
-
-system.pause
-system.resume
-system.stop
+```
+agent.message          agent.started          agent.completed
+agent.error            human.message          human.interrupt
+agent.delegation       agent.delegation.response
+agent.self_assessment  agent.role_change      agent.disagreement
+tool.request           tool.started           tool.completed
+tool.failed            permission.request     permission.approved
+permission.denied      memory.updated         observer.intervention
+emergence.observed     resource.warning       resource.critical
+system.pause           system.resume          system.stop
+experiment.started     experiment.completed   experiment.failed
+evidence.created       browser.search         browser.page_opened
+browser.content_extracted
 ```
 
-This will make debugging **much easier**.
-
 ---
 
-# 20. Observability
+## 18. OBSERVABILITY
 
-Create a dashboard showing:
-
-```text
+Dashboard shows:
+```
 SYSTEM
-────────────────────────
-RAM:          11.2 GB
-CPU:          68%
-Generation:   14 tok/s
-Temperature:  normal
-Active model: Agent A
+RAM: 11.2 GB / 16 GB
+CPU: 68%
+Gen: 14 tok/s
+Temp: normal
+Model: Agent A
 
 CONVERSATION
-────────────────────────
-Turn:         142
-Topic:        Distributed AI
-Duration:     47 min
+Turn: 142
+Topic: Distributed AI
+Duration: 47 min
 
 AGENTS
-────────────────────────
 A: generating
 B: waiting
 C: sleeping
 
 TOOLS
-────────────────────────
 Terminal: 2 calls
-Web:      7 calls
+Web: 7 calls
 
 PERMISSIONS
-────────────────────────
 Pending: 1
-```
 
-You need to **see why your Mac is heating up** rather than guessing.
+EMERGENCE
+Specialization: detected
+Cooperation: 3 delegations
+Disagreements: 2
+```
 
 ---
 
-# 21. Persistence
+## 19. PERSISTENCE
 
-If the application crashes:
-
-```text
-Restart
- ↓
-Load conversation state
- ↓
-Load memory
- ↓
-Recover pending tasks
- ↓
-Continue
+```
+SQLite → structured state (sessions, events, evidence, research, experiments)
+Filesystem → large artifacts (audio, reports, research, snapshots)
+Git/GitHub → source code + engineering history
 ```
 
-Use a lightweight local database such as SQLite.
+**SQLite + local filesystem = V1.** No PostgreSQL/Redis.
 
-Don't introduce PostgreSQL/Redis unless you actually need them.
-
-For this application:
-
-> **SQLite + local filesystem is enough for V1.**
+### Recovery
+```
+Process starts
+  ↓
+Open SQLite
+  ↓
+Find incomplete sessions
+  ↓
+Read latest checkpoint
+  ↓
+Validate Git state
+  ↓
+Restore session state
+  ↓
+Restore agent state
+  ↓
+Restore pending tasks
+  ↓
+Resume or ask human
+```
 
 ---
 
-# 22. Security model
+## 20. SECURITY MODEL
 
-Because you're giving agents access to your computer, treat the system as a **privileged autonomous application**.
+**Privileged autonomous application.**
 
-Every tool invocation should be logged:
-
-```text
-TIME
-AGENT
-TOOL
-ARGUMENTS
-PERMISSION
-RESULT
+Every tool invocation logged:
+```
+TIME | AGENT | TOOL | ARGUMENTS | PERMISSION | RESULT
 ```
 
-For dangerous commands, show the exact command before execution.
+Dangerous commands → show exact command before execution.
 
-The agent should never be able to silently escalate permissions.
+Agent **never** silently escalates permissions.
 
 ---
 
-# 23. Recommended technology stack
+## 21. TECHNOLOGY STACK
 
-Keep it simple.
+- **Language:** Python 3.11+
+- **LLM:** Ollama (local)
+- **API:** Ollama HTTP API
+- **Database:** SQLite (WAL mode)
+- **Event Bus:** asyncio queues
+- **STT:** faster-whisper (local)
+- **TTS:** pyttsx3 / edge-tts (local)
+- **Frontend:** Rich CLI (Click + Rich)
+- **Web:** aiohttp + BeautifulSoup
+- **Config:** .env + YAML
+- **Logging:** Structured JSONL
 
-```text
-Language:
-Python
-
-LLM:
-Ollama
-
-API:
-Ollama HTTP API
-
-Database:
-SQLite
-
-Event bus:
-asyncio queues initially
-
-STT:
-local lightweight speech-to-text
-
-TTS:
-local lightweight TTS
-
-Frontend:
-small local web UI
-
-Web:
-controlled browser/search tool
-
-Configuration:
-.env + YAML/TOML
-
-Logging:
-structured JSON logs
-```
-
-**Don't introduce Kafka, Redis, Kubernetes, Docker, microservices, etc. for V1.**
-
-You are building a local experiment, not AWS.
+**No:** Kafka, Redis, Kubernetes, Docker, microservices, PostgreSQL, vector DBs.
 
 ---
 
-# 24. Project structure
+## 22. PROJECT STRUCTURE
 
-I'd start approximately like this:
-
-```text
+```
 ai-sandbox/
-│
 ├── app/
 │   ├── main.py
-│   │
 │   ├── agents/
 │   │   ├── base.py
 │   │   ├── explorer.py
 │   │   ├── challenger.py
 │   │   └── observer.py
-│   │
 │   ├── orchestration/
 │   │   ├── conversation.py
 │   │   ├── scheduler.py
 │   │   └── state_machine.py
-│   │
 │   ├── models/
 │   │   ├── base.py
 │   │   └── ollama.py
-│   │
 │   ├── memory/
 │   │   ├── manager.py
 │   │   ├── summarizer.py
 │   │   └── store.py
-│   │
 │   ├── tools/
 │   │   ├── gateway.py
 │   │   ├── terminal.py
 │   │   ├── filesystem.py
 │   │   └── web.py
-│   │
 │   ├── permissions/
 │   │   └── manager.py
-│   │
 │   ├── audio/
 │   │   ├── stt.py
 │   │   └── tts.py
-│   │
 │   ├── resources/
 │   │   └── monitor.py
-│   │
-│   └── events/
-│       ├── bus.py
-│       └── schemas.py
-│
+│   ├── autonomy/
+│   │   └── environment.py
+│   ├── evidence/
+│   │   ├── schemas.py
+│   │   └── manager.py
+│   ├── sessions/
+│   │   └── manager.py
+│   ├── research/
+│   │   └── manager.py
+│   ├── decision/
+│   │   └── manager.py
+│   ├── artifacts/
+│   │   └── manager.py
+│   ├── self_modification/
+│   │   └── engine.py
+│   ├── capabilities/
+│   │   └── registry.py
+│   ├── db/
+│   │   └── migrations.py
+│   ├── events/
+│   │   ├── bus.py
+│   │   └── schemas.py
+│   ├── reports/
+│   │   └── generator.py
+│   ├── a2a/
+│   │   └── protocol.py
+│   └── logging_config.py
 ├── tests/
 ├── data/
 ├── logs/
@@ -985,100 +665,74 @@ ai-sandbox/
 
 ---
 
-# 25. Development phases
+## 23. DEVELOPMENT PHASES
 
-Don't ask your coding agent to build everything at once.
+### Phase 1 — Foundation
+- Event Bus, schemas
+- Ollama adapter, model abstraction
+- Base agent, A2A messages
 
-### Phase 1 — Core
+### Phase 2 — Model Runtime
+- Continuous A/B conversation
+- Streaming generation
 
-```text
-Ollama
-+
-Agent A
-+
-Agent B
-+
-Conversation Manager
-```
+### Phase 3 — Control + CLI
+- Control plane, interruption, pause/resume
+- CLI (start, watch, interactive)
 
-Make A/B talk indefinitely.
+### Phase 4 — Persistence
+- SQLite, migrations, sessions, events, messages, checkpoints
 
-### Phase 2 — Audio
+### Phase 5 — Memory + Evidence
+- Memory, evidence plane, provenance, research journal
 
-```text
-TTS
-+
-STT
-+
-Human interruption
-```
+### Phase 6 — Tools
+- Terminal, filesystem, browser, permission gateway
 
-Now you can actually sit and listen.
+### Phase 7 — Resources
+- RAM monitoring, inference metrics, scheduling, model routing
 
-### Phase 3 — Memory
+### Phase 8 — Voice
+- STT, TTS, interruption
 
-```text
-SQLite
-+
-summaries
-+
-conversation state
-```
+### Phase 9 — Experiments
+- Experiment system, benchmarks, artifacts
 
-### Phase 4 — Observer
+### Phase 10 — Git/GitHub
+- Branch workflow, automated checks, issue/PR integration
 
-Add Agent C.
+### Phase 11 — Self-Modification
+- Proposals, isolated worktrees, tests, benchmarks, approval, rollback
 
-### Phase 5 — Tools
-
-Add:
-
-```text
-filesystem
-terminal
-web
-```
-
-### Phase 6 — Permission system
-
-Human approval UI.
-
-### Phase 7 — Resource management
-
-Optimize aggressively for the M4.
-
-### Phase 8 — Autonomous environment
-
-Allow agents to decide:
-
-> "What should we investigate next?"
-
-while you observe.
-
-### Phase 9 — A2A protocol
-
-Once the internal architecture works, expose the communication layer through a proper A2A-compatible interface.
+### Phase 12 — Advanced A2A
+- Protocol, agent discovery, scalable routing
 
 ---
 
-# 26. Definition of "done"
+## 24. DEFINITION OF DONE
 
-Don't let the coding agent declare victory because the UI launches.
+V1 complete when:
 
-V1 is complete only when:
+- [ ] Agents communicate indefinitely via event bus
+- [ ] Conversation survives hundreds of turns
+- [ ] User can interrupt speech
+- [ ] User can stop/resume system
+- [ ] Memory doesn't grow indefinitely (summarization)
+- [ ] Agent failures don't crash application
+- [ ] Model backend replaceable (Ollama → other)
+- [ ] Tool layer isolated (gateway pattern)
+- [ ] Permissions work (request/approve/deny)
+- [ ] Every tool action logged
+- [ ] Resource manager detects high load
+- [ ] Observer doesn't consume unnecessary inference
+- [ ] Mac remains usable during normal operation
+- [ ] Graceful shutdown (SIGINT/SIGTERM)
+- [ ] Tests cover failures and interruptions
+- [ ] Agents demonstrate emergent behavior (specialization, cooperation, etc.)
+- [ ] System records intent + action for every meaningful event
+- [ ] Agents can self-determine objectives and strategies
+- [ ] Emergent behaviors are observed and recorded
 
-* [ ] A and B communicate indefinitely.
-* [ ] Conversation survives hundreds of turns.
-* [ ] User can interrupt speech.
-* [ ] User can stop/resume the system.
-* [ ] Memory doesn't grow indefinitely.
-* [ ] Agent failures don't crash the application.
-* [ ] Model backend can be replaced.
-* [ ] Tool layer is isolated.
-* [ ] Permissions work.
-* [ ] Every tool action is logged.
-* [ ] Resource manager detects high load.
-* [ ] Observer doesn't unnecessarily consume inference.
-* [ ] Mac remains usable during normal operation.
-* [ ] System gracefully shuts down.
-* [ ] Tests cover failures and interruptions.
+---
+
+The architecture enables **maximum agent autonomy** within **minimum necessary system constraints**. The system observes emergence rather than prescribing it.

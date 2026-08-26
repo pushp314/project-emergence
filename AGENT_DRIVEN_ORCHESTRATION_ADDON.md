@@ -29,59 +29,59 @@ Core principle:
 
 ---
 
-# 2. TARGET ARCHITECTURE
+## 2. TARGET ARCHITECTURE
 
 ```text
-                         USER
-                           │
-                           ▼
-                    CONTROL PLANE
-                           │
-                       EVENT BUS
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-              ▼                         ▼
-          AGENT A                   AGENT B
-          Explorer                 Challenger
-              │                         │
-              └────────────┬────────────┘
-                           │
-                    AGENT DECISION
-                           │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-       MODEL            TOOL             AGENT
-      REQUEST          REQUEST          REQUEST
-          │                │                │
-          └────────────────┼────────────────┘
-                           ▼
-                    CAPABILITY REGISTRY
-                           │
-                           ▼
-                    PERMISSION GATE
-                           │
-                           ▼
-                   RESOURCE MANAGER
-                           │
-                           ▼
-                     EXECUTION
-                           │
-                           ▼
-                    RESULT + EVIDENCE
-                           │
-              ┌────────────┴────────────┐
-              ▼                         ▼
-           MEMORY                    AGENTS
-              │                         │
-              └────────────┬────────────┘
-                           ▼
-                         SQLite
+                          USER
+                            │
+                            ▼
+                     CONTROL PLANE
+                            │
+                        EVENT BUS
+                            │
+               ┌────────────┴────────────┐
+               │                         │
+               ▼                         ▼
+           AGENT A                   AGENT B
+           Atlas                    Argus
+               │                         │
+               └────────────┬────────────┘
+                            │
+                     AGENT DECISION
+                            │
+           ┌────────────────┼────────────────┐
+           ▼                ▼                ▼
+        MODEL            TOOL             AGENT
+       REQUEST          REQUEST          REQUEST
+           │                │                │
+           └────────────────┼────────────────┘
+                            ▼
+                     CAPABILITY REGISTRY
+                            │
+                            ▼
+                     PERMISSION GATE
+                            │
+                            ▼
+                    RESOURCE MANAGER
+                            │
+                            ▼
+                      EXECUTION
+                            │
+                            ▼
+                     RESULT + EVIDENCE
+                            │
+               ┌────────────┴────────────┐
+               ▼                         ▼
+            MEMORY                    AGENTS
+               │                         │
+               └────────────┬────────────┘
+                            ▼
+                          SQLite
 ```
 
 ---
 
-# 3. NO CENTRAL BRAIN
+## 3. NO CENTRAL BRAIN
 
 Do NOT implement a permanent central router that determines every model selection.
 
@@ -123,7 +123,7 @@ It is an execution and governance authority.
 
 ---
 
-# 4. AGENT DECISION LOOP
+## 4. AGENT DECISION LOOP
 
 Every capable agent should follow approximately:
 
@@ -149,22 +149,22 @@ OBSERVE RESULT
 EVALUATE
    ↓
 DECIDE NEXT ACTION
-   │
-   ├── Continue
-   ├── Research
-   ├── Ask another agent
-   ├── Ask specialist model
-   ├── Use another tool
-   ├── Change strategy
-   ├── Escalate
-   └── Finish
+    │
+    ├── Continue
+    ├── Research
+    ├── Ask another agent
+    ├── Ask specialist model
+    ├── Use another tool
+    ├── Change strategy
+    ├── Escalate
+    └── Finish
 ```
 
 The agent must be able to revise its decision after observing results.
 
 ---
 
-# 5. CAPABILITY REGISTRY
+## 5. CAPABILITY REGISTRY
 
 Create a machine-readable capability registry.
 
@@ -190,23 +190,28 @@ models:
       - general_reasoning
       - research
       - conversation
+      - analysis
 
   deepseek-r1-7b:
     capabilities:
       - deep_reasoning
       - criticism
       - analysis
-
-  dolphin3-cyber-8b:
-    capabilities:
-      - cybersecurity
-      - security_analysis
+      - math
+      - logic
 
   qwen2.5-coder-7b:
     capabilities:
       - programming
       - code_analysis
       - debugging
+      - code_generation
+
+  dolphin3-cyber-8b:
+    capabilities:
+      - cybersecurity
+      - security_analysis
+      - vulnerability_research
 ```
 
 The registry must be discoverable by agents.
@@ -215,7 +220,7 @@ Do not require agents to memorize model names.
 
 ---
 
-# 6. AGENTS CHOOSE CAPABILITIES
+## 6. AGENTS CHOOSE CAPABILITIES
 
 The agent should reason in terms of capability first.
 
@@ -247,7 +252,7 @@ This prevents agent logic from becoming tightly coupled to model names.
 
 ---
 
-# 7. MODEL SELECTION
+## 7. MODEL SELECTION
 
 Agents may consider:
 
@@ -277,12 +282,12 @@ UNAVAILABLE
 
 ---
 
-# 8. CURRENT MODEL POOL
+## 8. CURRENT MODEL POOL
 
 The initial environment may contain:
 
 ```text
-Qwen3 8B Abliterated
+Qwen3 8B
 DeepSeek-R1-Distill-Qwen-7B
 Dolphin3-Cyber-8B
 Qwen2.5-Coder-7B
@@ -295,7 +300,7 @@ The architecture must remain model-agnostic.
 
 ---
 
-# 9. AGENT-TO-AGENT DELEGATION
+## 9. AGENT-TO-AGENT DELEGATION
 
 Agents may delegate work to other agents.
 
@@ -343,7 +348,7 @@ deadline if applicable
 
 ---
 
-# 10. AGENT REQUEST PROTOCOL
+## 10. AGENT REQUEST PROTOCOL
 
 All model/tool/agent requests should use structured requests.
 
@@ -366,7 +371,7 @@ The infrastructure returns a structured result.
 
 ---
 
-# 11. PERMISSION GATE
+## 11. PERMISSION GATE
 
 Agents decide what they WANT to do.
 
@@ -388,7 +393,7 @@ Never allow agent reasoning to bypass the Permission Gate.
 
 ---
 
-# 12. RESOURCE GATE
+## 12. RESOURCE GATE
 
 Before execution, the Resource Manager evaluates:
 
@@ -422,7 +427,7 @@ Agents should adapt to resource availability.
 
 ---
 
-# 13. M4 16 GB OPTIMIZATION
+## 13. M4 16 GB OPTIMIZATION
 
 The initial hardware is:
 
@@ -449,7 +454,7 @@ Do not allow two agents to automatically launch multiple heavy models merely bec
 
 ---
 
-# 14. MODEL LOADING POLICY
+## 14. MODEL LOADING POLICY
 
 Models should be loaded on demand.
 
@@ -475,7 +480,7 @@ The Resource Manager should determine whether keeping a model loaded is worthwhi
 
 ---
 
-# 15. ESCALATION
+## 15. ESCALATION
 
 Agents should be able to escalate when their current approach is insufficient.
 
@@ -499,7 +504,7 @@ Escalation should be based on observed need, not simply on task size.
 
 ---
 
-# 16. FAILURE RECOVERY
+## 16. FAILURE RECOVERY
 
 If a selected model fails:
 
@@ -525,7 +530,7 @@ Use bounded retries and record failed attempts.
 
 ---
 
-# 17. AGENT CONFIDENCE
+## 17. AGENT CONFIDENCE
 
 Agents may provide confidence estimates, but confidence must NOT be treated as proof.
 
@@ -548,7 +553,7 @@ Human decision
 
 ---
 
-# 18. EVALUATION LOOP
+## 18. EVALUATION LOOP
 
 After every meaningful delegated task:
 
@@ -579,7 +584,7 @@ The evaluation can consider:
 
 ---
 
-# 19. AGENT DISAGREEMENT
+## 19. AGENT DISAGREEMENT
 
 Disagreement is useful.
 
@@ -611,7 +616,7 @@ Preserve both positions and the evidence used to resolve them.
 
 ---
 
-# 20. NO INFINITE USELESS LOOPS
+## 20. NO INFINITE USELESS LOOPS
 
 The system may support continuous autonomous operation, but agents must not endlessly repeat the same reasoning.
 
@@ -635,7 +640,7 @@ Change strategy / ask human
 
 ---
 
-# 21. AGENT MEMORY OF DECISIONS
+## 21. AGENT MEMORY OF DECISIONS
 
 Store important decisions:
 
@@ -664,7 +669,7 @@ Do not hard-code this behavior prematurely.
 
 ---
 
-# 22. ROUTING HISTORY
+## 22. ROUTING HISTORY
 
 SQLite should record:
 
@@ -687,7 +692,7 @@ This becomes the foundation for future empirical optimization.
 
 ---
 
-# 23. FUTURE LEARNING
+## 23. FUTURE LEARNING
 
 Do NOT implement reinforcement learning as the first version.
 
@@ -715,7 +720,7 @@ The initial objective is to build a clean dataset of decisions and outcomes.
 
 ---
 
-# 24. SPECIALIST MODELS
+## 24. SPECIALIST MODELS
 
 Specialist models should be treated as capabilities.
 
@@ -743,7 +748,7 @@ Agents decide when a specialist is necessary.
 
 ---
 
-# 25. MULTI-MODEL COLLABORATION
+## 25. MULTI-MODEL COLLABORATION
 
 Agents may deliberately use multiple models.
 
@@ -767,7 +772,7 @@ This is preferred over forcing one model to perform every task.
 
 ---
 
-# 26. AGENT ROLE VS MODEL
+## 26. AGENT ROLE VS MODEL
 
 Do not confuse:
 
@@ -810,49 +815,29 @@ This is allowed.
 
 ---
 
-# 27. AGENT A / AGENT B INITIAL ROLES
+## 27. AGENT A / AGENT B INITIAL CONFIGURATION
 
 Initial configuration:
 
 ```text
 Agent A
-Role: Explorer / Researcher
-
-Primary:
-Qwen3 8B
-
-Responsibilities:
-- explore
-- research
-- generate hypotheses
-- use browser
-- propose approaches
-- identify required capabilities
+Identity: atlas
+Default Model: Qwen3 8B
 ```
 
 ```text
 Agent B
-Role: Challenger / Reasoner
-
-Primary:
-DeepSeek-R1-Distill-Qwen-7B
-
-Responsibilities:
-- challenge
-- critique
-- verify
-- identify assumptions
-- reason deeply
-- request evidence
+Identity: argus
+Default Model: DeepSeek-R1-Distill-Qwen-7B
 ```
 
-These are DEFAULT roles, not permanent restrictions.
+These are DEFAULT configurations, not permanent restrictions.
 
 Agents may request other capabilities when justified.
 
 ---
 
-# 28. OBSERVER ROLE
+## 28. OBSERVER ROLE
 
 An optional Observer may monitor:
 
@@ -865,6 +850,7 @@ errors
 permissions
 research
 experiments
+emergence
 ```
 
 The Observer should generally NOT participate in reasoning unless explicitly assigned.
@@ -873,7 +859,7 @@ It exists to improve observability.
 
 ---
 
-# 29. HUMAN OVERRIDE
+## 29. HUMAN OVERRIDE
 
 The human can always:
 
@@ -891,7 +877,7 @@ Human commands take precedence over agent autonomy.
 
 ---
 
-# 30. EVIDENCE
+## 30. EVIDENCE
 
 Every important capability decision should be observable.
 
@@ -915,7 +901,7 @@ This allows the user to later understand:
 
 ---
 
-# 31. CLI OBSERVABILITY
+## 31. CLI OBSERVABILITY
 
 The CLI should eventually expose:
 
@@ -929,6 +915,7 @@ resources
 models
 sessions
 timeline
+emergence
 ```
 
 Example:
@@ -951,7 +938,7 @@ Agent B
 
 ---
 
-# 32. TESTING REQUIREMENTS
+## 32. TESTING REQUIREMENTS
 
 Test:
 
@@ -973,7 +960,7 @@ Do not consider agent-driven orchestration complete until these are tested.
 
 ---
 
-# 33. ACCEPTANCE CRITERIA
+## 33. ACCEPTANCE CRITERIA
 
 This addon is implemented when:
 
@@ -997,7 +984,7 @@ This addon is implemented when:
 
 ---
 
-# 34. IMPLEMENTATION ORDER
+## 34. IMPLEMENTATION ORDER
 
 Build incrementally:
 
@@ -1024,7 +1011,7 @@ Build deterministic capability discovery first.
 
 ---
 
-# 35. IMPORTANT DESIGN RULE
+## 35. IMPORTANT DESIGN RULE
 
 Do not make the system:
 
@@ -1058,7 +1045,7 @@ This preserves autonomy without surrendering system control.
 
 ---
 
-# 36. FINAL PRINCIPLE
+## 36. FINAL PRINCIPLE
 
 The goal is not:
 
@@ -1071,33 +1058,33 @@ The goal is:
 The orchestration layer should therefore become:
 
 ```text
-                     ENVIRONMENT
-                          │
-        ┌─────────────────┼─────────────────┐
-        ↓                 ↓                 ↓
-   Capabilities      Permissions       Resources
-        │                 │                 │
-        └─────────────────┼─────────────────┘
-                          ↓
-                       AGENTS
-                          │
-                    SELF-DIRECTED
-                      DECISIONS
-                          │
-          ┌───────────────┼────────────────┐
-          ↓               ↓                ↓
-        Models          Tools           Agents
-          └───────────────┼────────────────┘
-                          ↓
-                       RESULTS
-                          ↓
-                    EVALUATION
-                          ↓
-                       MEMORY
-                          ↓
-                       SQLite
-                          ↓
-                 FUTURE DECISIONS
+                      ENVIRONMENT
+                           │
+         ┌─────────────────┼─────────────────┐
+         ↓                 ↓                 ↓
+    Capabilities      Permissions       Resources
+         │                 │                 │
+         └─────────────────┼─────────────────┘
+                           ↓
+                        AGENTS
+                           │
+                     SELF-DIRECTED
+                       DECISIONS
+                           │
+           ┌───────────────┼────────────────┐
+           ↓               ↓                ↓
+         Models          Tools           Agents
+           └───────────────┼────────────────┘
+                           ↓
+                        RESULTS
+                           ↓
+                     EVALUATION
+                           ↓
+                        MEMORY
+                           ↓
+                        SQLite
+                           ↓
+                  FUTURE DECISIONS
 ```
 
 This addon must be integrated with `RULES.md`, `ARCHITECTURE.md`, the SQLite addon, self-modification addon, evidence addon, and CLI addon.

@@ -102,6 +102,33 @@ None
 - **Proposed Fix:** Add JSONL structured logging for Evidence Plane
 - **Status:** Planned
 
+### Issue: Fixed Agent Roles in Source Code
+- **Observed:** Source code defines `AgentRole.EXPLORER`, `AgentRole.CHALLENGER`, `AgentRole.OBSERVER` enums and hard-coded system prompts assigning fixed roles
+- **Severity:** DESIGN DEBT (conflicts with autonomy architecture)
+- **Likely Cause:** Early implementation used fixed roles for convenience
+- **Proposed Fix:** Replace AgentRole enum with agent identity only; system prompts should describe capabilities not roles; agents self-declare roles via self-assessment events
+- **Status:** Open
+
+### Issue: Capability Registry Contains Fixed Role Assignments
+- **Observed:** DEFAULT_AGENT_CAPABILITIES in registry.py assigns "explorer" role to agent_a and "challenger" role to agent_b with hardcoded capability lists
+- **Severity:** DESIGN DEBT (conflicts with autonomy architecture)
+- **Likely Cause:** Early implementation used fixed roles for capability routing
+- **Proposed Fix:** Replace with identity-based capabilities; agents should discover and request capabilities dynamically; remove role field from AgentCapability
+- **Status:** Open
+
+### Issue: Agent System Prompts Prescribe Fixed Behaviors
+- **Observed:** explorer.py and challenger.py have system prompts that explicitly assign "Explorer" and "Challenger" roles with prescribed behaviors
+- **Severity:** DESIGN DEBT (contaminates the experiment per RULES.md)
+- **Likely Cause:** Early implementation needed behavioral differentiation
+- **Proposed Fix:** Replace with generic autonomous agent prompts that describe available capabilities without prescribing roles; agents self-determine behavior
+- **Status:** Open
+
+### Issue: Event Schema References Fixed Roles
+- **Observed:** Event payloads include role field from AgentRole enum (explorer/challenger/observer)
+- **Severity:** DESIGN DEBT (conflicts with autonomous agent identity)
+- **Proposed Fix:** Change role field to identity field (atlas/argus/observer) or remove; track self-declared roles via separate emergence events
+- **Status:** Open
+
 ---
 
 ## PERFORMANCE
@@ -140,4 +167,50 @@ None
 - **Observed:** Symlink resolution could escape base path
 - **Severity:** SECURITY
 - **Proposed Fix:** Resolve symlinks and verify within base path
+- **Status:** Open
+
+---
+
+## DOCUMENTATION vs IMPLEMENTATION MISMATCHES (Discovered During Sync)
+
+### Issue: Documentation Claims Autonomy But Code Has Fixed Roles
+- **Observed:** RULES.md, ARCHITECTURE.md, AGENT_AUTONOMY.md describe full autonomy with emergent roles, but source code (base.py, explorer.py, challenger.py, schemas.py, registry.py) implements fixed roles (Explorer/Challenger/Observer)
+- **Severity:** HIGH (architectural contradiction)
+- **Impact:** Experiment contamination - agents are prescribed roles rather than discovering them
+- **Proposed Fix:** 
+  1. Remove AgentRole enum from schemas.py, replace with agent identity
+  2. Update base.py to use identity instead of role
+  3. Replace explorer.py/challenger.py system prompts with generic autonomous agent prompts
+  4. Update registry.py DEFAULT_AGENT_CAPABILITIES to remove fixed role assignments
+  5. Add emergence observation events to evidence system
+- **Status:** Documented - requires implementation
+
+### Issue: Intent vs Action Distinction Not Fully Implemented
+- **Observed:** EVIDENCE_SYSTEM.md documents 7-stage distinction (intent→request→permission→execution→result→interpretation→follow-up), but evidence schemas only capture basic intent/action
+- **Severity:** MEDIUM (incomplete implementation)
+- **Proposed Fix:** Extend evidence schemas to capture all 7 stages with correlation IDs
+- **Status:** Open
+
+### Issue: Emergence Observation Not Implemented
+- **Observed:** AGENT_AUTONOMY.md and ARCHITECTURE.md describe emergence observation (specialization, leadership, cooperation, etc.) but no emergence.observed event type or recording exists in code
+- **Severity:** MEDIUM (missing experimental capability)
+- **Proposed Fix:** Add emergence.observed event type, evidence schema, and observer analysis logic
+- **Status:** Open
+
+### Issue: Self-Assessment and Role Change Events Not Implemented
+- **Observed:** AGENT_AUTONOMY.md documents agent.self_assessment and agent.role_change events, but these don't exist in EventType enum or evidence schemas
+- **Severity:** MEDIUM (missing autonomy tracking)
+- **Proposed Fix:** Add event types and evidence schemas for self-assessment and role change tracking
+- **Status:** Open
+
+### Issue: Agent Disagreement Events Not Implemented
+- **Observed:** AGENT_AUTONOMY.md documents agent.disagreement events with preserved positions and evidence, but not implemented in code
+- **Severity:** MEDIUM (missing conflict tracking)
+- **Proposed Fix:** Add disagreement event type and evidence schema
+- **Status:** Open
+
+### Issue: Experiment Categories Not Reflected in Code
+- **Observed:** EXPERIMENTS.md defines 4 experiment categories with specific metrics, but ExperimentRecord schema doesn't capture category or emergence metrics
+- **Severity:** LOW (documentation ahead of implementation)
+- **Proposed Fix:** Extend experiment schema with category and emergence tracking fields
 - **Status:** Open

@@ -58,23 +58,50 @@
 - Protected operations
 - PR templates for self-modification
 
-## Changed
+### Documentation Synchronization (Autonomous Agent Design)
+- **AGENT_AUTONOMY.md**: Complete rewrite — removed fixed roles, added self-determination loop, emergence observation framework (19 behaviors), self-assessment, role change tracking, disagreement preservation, relationship evolution, agent decision memory
+- **ARCHITECTURE.md**: Updated agent identities to Atlas/Argus/Observer, added emergence.observed event type, added delegation/self-assessment/role_change/disagreement events, updated observability dashboard with emergence metrics
+- **EVIDENCE_SYSTEM.md**: Mandatory 7-stage intent→action distinction (intent→request→permission→execution→result→interpretation→follow-up), added emergence/self-assessment/role_change/disagreement evidence types, added "Observation Must Not Become Intervention" principle
+- **PERMISSIONS.md**: Explicit behavioral autonomy vs system authority separation, updated permission gate architecture, added appeal process
+- **EXPERIMENTS.md**: Open-Ended Autonomy as primary experiment category, 4 experiment categories with emergence metrics, detailed session report template with emergence observations
+- **AGENT_DRIVEN_ORCHESTRATION_ADDON.md**: Removed fixed role assignments, changed to identity-based (atlas/argus), clarified DEFAULT configs not restrictions
+- **KNOWN_ISSUES.md**: Documented 9 documentation-vs-implementation mismatches as DESIGN DEBT
+
+### Changed
 - Unified SQLite schema replaces separate memory/evidence databases
 - Evidence Manager now central persistence layer
 - Session Manager handles lifecycle and recovery
-- CLI is primary interface (web UI deferred to future)
+- CLI is primary interface (web UI deferred)
+- Agent identities: Atlas, Argus, Observer (not Explorer/Challenger/Observer)
+- Documentation now reflects "maximum autonomy, minimum system authority" principle
 
-## Fixed
+### Fixed
 - Ollama streaming timeout handling
 - State machine transition validation
 - SQL binding parameter counts
 - Resource manager shutdown ordering
 
-## Performance
+### Performance
 - Sequential inference for M4 16GB optimization
 - Resource monitoring <1% CPU overhead
 - SQLite write latency <5ms
 - Session recovery <2 seconds
 
-## Documentation
+### Documentation
 - Created PROJECT_STATE.md, CHANGELOG.md, DECISIONS.md, KNOWN_ISSUES.md, IMPLEMENTATION_LOG.md
+- All architecture docs synchronized with autonomous agent design principles
+
+## 2026-08-26 (Documentation Sync)
+
+### Added
+- Decision: Remove Fixed Agent Roles from Architecture
+- Decision: Implement 7-Stage Intent-Action Distinction in Evidence
+- Decision: Add Emergence Observation as First-Class Capability
+
+### Design Debt Identified
+- Fixed Agent Roles in Source Code (AgentRole enum, system prompts, capability registry)
+- Intent vs Action Distinction Not Fully Implemented (7-stage vs basic)
+- Emergence Observation Not Implemented (no event types or recording)
+- Self-Assessment and Role Change Events Not Implemented
+- Agent Disagreement Events Not Implemented
+- Experiment Categories Not Reflected in Code

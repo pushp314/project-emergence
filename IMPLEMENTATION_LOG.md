@@ -11,7 +11,7 @@
 
 **Files Created:**
 - app/events/bus.py - EventBus with asyncio queues
-- app/events/schemas.py - EventType, AgentRole, AgentMessage, ToolCall, PermissionRequest, etc.
+- app/events/schemas.py - EventType, AgentRole, AgentMessage, ToolCall, ToolResult, PermissionRequest, etc.
 - app/models/base.py - ModelAdapter, GenerationRequest, ModelRegistry
 - app/models/ollama.py - OllamaAdapter with streaming
 - app/agents/base.py - BaseAgent, ExplorerAgent, ChallengerAgent, ObserverAgent
@@ -154,8 +154,6 @@
 
 ---
 
-## 2026-08-26 - Testing & Verification
-
 ### Session 7: Integration Testing
 **Objective:** Verify all components work together
 
@@ -193,6 +191,99 @@
 
 ---
 
+## 2026-08-26 - Documentation Synchronization
+
+### Session 8: Documentation Sync with Autonomous Agent Design
+**Objective:** Synchronize all project documentation with latest autonomous-agent experiment design principles
+
+**Principle Applied:** "Maximum autonomy in decision-making, minimum necessary system authority."
+
+**Documents Modified:**
+
+1. **AGENT_AUTONOMY.md** - Complete rewrite to reflect:
+   - Removed all fixed role references (Explorer/Challenger)
+   - Added explicit self-determination loop with 11 decision categories
+   - Added emergence observation framework with 19 behavior categories
+   - Added self-assessment and role change event structures
+   - Added disagreement tracking with evidence preservation
+   - Added relationship evolution tracking
+   - Added agent decision memory for learning
+
+2. **ARCHITECTURE.md** - Updated to reflect:
+   - Agent identities: Atlas, Argus, Observer (not Explorer/Challenger/Observer)
+   - Added emergence.observed event type
+   - Added agent.delegation, agent.self_assessment, agent.role_change, agent.disagreement events
+   - Updated observability dashboard to show emergence metrics
+   - Clarified agents have NO fixed roles - roles emerge from interaction
+
+3. **EVIDENCE_SYSTEM.md** - Strengthened intent vs action distinction:
+   - Added mandatory 7-stage distinction (intent→request→permission→execution→result→interpretation→follow-up)
+   - Added emergence observation event types
+   - Added self-assessment, role change, disagreement evidence types
+   - Added "Observation Must Not Become Intervention" section
+   - Enhanced timeline reconstruction with intent/action detail
+
+4. **PERMISSIONS.md** - Emphasized behavioral autonomy vs system authority:
+   - Clarified core principle: agents decide WHAT, infrastructure decides WHETHER
+   - Updated permission gate architecture diagram
+   - Added appeal process for denials
+   - Strengthened security principles section
+
+5. **EXPERIMENTS.md** - Added open-ended autonomy experiment category:
+   - Defined primary experiment: "What happens when two autonomous agents with no predefined task?"
+   - Added 4 experiment categories with emergence metrics
+   - Added detailed session report template with emergence observations
+   - Specified what we DON'T do (no assigned roles, objectives, patterns)
+
+6. **AGENT_DRIVEN_ORCHESTRATION_ADDON.md** - Removed fixed roles:
+   - Changed Agent A/B initial config to use identities (atlas/argus) not roles
+   - Removed "Explorer/Challenger" role references throughout
+   - Updated capability registry examples to use capabilities not roles
+   - Clarified DEFAULT configurations are not restrictions
+
+7. **KNOWN_ISSUES.md** - Added documentation vs implementation conflicts:
+   - Fixed Agent Roles in Source Code (DESIGN DEBT)
+   - Capability Registry Fixed Role Assignments (DESIGN DEBT)
+   - Agent System Prompts Prescribe Fixed Behaviors (DESIGN DEBT)
+   - Event Schema References Fixed Roles (DESIGN DEBT)
+   - Intent vs Action Distinction Not Fully Implemented
+   - Emergence Observation Not Implemented
+   - Self-Assessment and Role Change Events Not Implemented
+   - Agent Disagreement Events Not Implemented
+   - Experiment Categories Not Reflected in Code
+
+**Files Inspected for Verification:**
+- app/events/schemas.py - AgentRole enum, EventType
+- app/agents/base.py - BaseAgent, ExplorerAgent, ChallengerAgent, ObserverAgent classes
+- app/agents/explorer.py - System prompt assigns "Explorer" role
+- app/agents/challenger.py - System prompt assigns "Challenger" role
+- app/agents/observer.py - System prompt assigns "Observer" role
+- app/capabilities/registry.py - DEFAULT_AGENT_CAPABILITIES with fixed roles
+
+**Conflicts Discovered (Documented in KNOWN_ISSUES.md):**
+1. Documentation claims full autonomy with emergent roles, but code has fixed AgentRole enum (explorer/challenger/observer)
+2. System prompts explicitly assign "You are Agent A, the Explorer" and "You are Agent B, the Challenger"
+3. Capability registry hardcodes role="explorer" for agent_a and role="challenger" for agent_b
+4. Event payloads include role field from AgentRole enum
+5. 7-stage intent→action distinction not fully implemented in evidence schemas
+6. No emergence.observed event type or recording logic
+7. No agent.self_assessment, agent.role_change, agent.disagreement event types
+
+**Decisions Recorded (DECISIONS.md):**
+- Decision: Remove Fixed Agent Roles from Architecture
+- Decision: Implement 7-Stage Intent-Action Distinction in Evidence
+- Decision: Add Emergence Observation as First-Class Capability
+
+**Next Steps Required:**
+1. Implement code changes to remove fixed roles from source
+2. Add emergence observation event types and evidence schemas
+3. Add self-assessment, role change, disagreement event types
+4. Update agent system prompts to be capability-based not role-based
+5. Replace AgentRole enum with agent identity
+6. Implement 7-stage intent-action tracking in evidence system
+
+---
+
 ## Summary Statistics
 
 **Total Files Created:** ~40 Python files
@@ -204,4 +295,4 @@
 **Database Tables:** 18+
 **Test Coverage:** Manual integration only
 
-**Known Issues Remaining:** 8 (2 MEDIUM, 4 LOW, 2 DESIGN DEBT, 2 PERFORMANCE, 3 SECURITY)
+**Known Issues Remaining:** 8 (2 MEDIUM, 4 LOW, 2 DESIGN DEBT, 2 PERFORMANCE, 3 SECURITY) + 9 documentation-implementation mismatches

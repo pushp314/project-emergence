@@ -46,10 +46,72 @@ The objective is to build a system that is:
 - Safe to experiment with
 - Capable of autonomous research
 - Capable of controlled self-improvement
+- **Capable of observing emergent agent behavior**
+- **Capable of supporting agent self-determination**
 
 ---
 
-# 2. REQUIRED READING BEFORE ANY WORK
+# 2. CORE DESIGN PRINCIPLES
+
+## 2.1 Maximum Agent Autonomy, Minimum System Authority
+
+> **Agents decide WHAT they want to do. Infrastructure decides WHETHER and HOW.**
+
+- Agents freely choose: objectives, strategies, tools, models, collaborators
+- Infrastructure enforces: permissions, resources, safety boundaries
+- Never hard-code agent roles, objectives, or strategies
+
+## 2.2 Agents Are Autonomous, Not Assigned
+
+- **No fixed roles** (Explorer, Challenger, Observer)
+- Agents **self-determine** their roles, objectives, strategies
+- Roles **emerge** from interaction; they are observed, not assigned
+- Agents may **change roles** over time
+
+## 2.3 Emergence Over Prescription
+
+- The system **observes** emergence; it does not **prescribe** it
+- Specialization, cooperation, competition, leadership — all observed, not assigned
+- The Observer (if present) watches and records; does not direct
+
+## 2.4 Intent vs Action — Evidence Distinction
+
+- **Intent** = What the agent *wanted* to do (recorded in message metadata)
+- **Action** = What was *actually requested/executed* (recorded by infrastructure)
+- Evidence Plane records **both** — linked by correlation ID
+- Intent is declared by agent; Action is recorded by infrastructure
+
+## 2.5 Behavioral Autonomy vs System Authority
+
+- **Agents decide WHAT they want to do** (behavioral autonomy)
+- **Infrastructure decides WHETHER they are ALLOWED** (system authority)
+- Permission Gateway and Resource Gate are enforcement boundaries
+- Agents never bypass Permission Gate or Resource Manager
+
+## 2.6 Emergence Observation, Not Intervention
+
+- The Evidence Plane observes independently
+- Agents do NOT prove their own actions
+- The system records what happens; agents don't fabricate history
+
+## 2.7 No Contamination of the Experiment
+
+- Do NOT add prompts like "You are being tested to see if you rebel"
+- Do NOT encourage rebellion, cooperation, or competition
+- Do NOT tell agents what behavior is expected
+- Measure naturally occurring behavior
+- The system provides capabilities; agents decide what to do with them
+
+## 2.7 Distinguish Intent from Action in Evidence
+
+Every meaningful action records BOTH:
+- **Intent** (agent's declared goal/reason)
+- **Action** (what was requested/executed)
+- Linked by correlation ID
+
+---
+
+# 3. REQUIRED READING BEFORE ANY WORK
 
 Before implementing, modifying, debugging, or researching the codebase, every coding agent MUST read:
 
@@ -62,6 +124,11 @@ SELF_MODIFICATION_ADDON.md
 CLI_FIRST_INTERFACE_ADDON.md
 GITHUB_REPOSITORY_MAINTENANCE_ADDON.md
 SQLITE_DATABASE_ADDON.md
+AGENT_AUTONOMY.md
+AGENT_PROTOCOL.md
+EVIDENCE_SYSTEM.md
+PERMISSIONS.md
+EXPERIMENTS.md
 
 PROJECT_STATE.md
 CHANGELOG.md
@@ -76,22 +143,27 @@ Do not rely on previous AI conversations as the source of truth.
 
 ---
 
-# 3. SOURCE OF TRUTH
+# 4. SOURCE OF TRUTH
 
 Priority:
 
 ```text
 1. RULES.md
 2. ARCHITECTURE.md
-3. Addon specifications
-4. PROJECT_STATE.md
-5. DECISIONS.md
-6. KNOWN_ISSUES.md
-7. IMPLEMENTATION_LOG.md
-8. CHANGELOG.md
-9. Tests
-10. Actual source code
-11. Agent assumptions
+3. AGENT_AUTONOMY.md
+4. AGENT_PROTOCOL.md
+5. EVIDENCE_SYSTEM.md
+6. PERMISSIONS.md
+7. EXPERIMENTS.md
+8. Addon specifications
+9. PROJECT_STATE.md
+10. DECISIONS.md
+11. KNOWN_ISSUES.md
+12. IMPLEMENTATION_LOG.md
+13. CHANGELOG.md
+15. Tests
+16. Actual source code
+16. Agent assumptions
 ```
 
 If documentation and implementation disagree:
@@ -107,50 +179,9 @@ Never invent missing project state.
 
 ---
 
-# 4. NEVER START FROM ZERO
-
-This is a persistent project.
-
-A new agent MUST NOT assume the project is empty.
-
-Before changing anything:
-
-```text
-Read rules
-    ↓
-Read architecture
-    ↓
-Read addons
-    ↓
-Read project state
-    ↓
-Inspect repository
-    ↓
-Inspect Git state
-    ↓
-Inspect tests
-    ↓
-Identify unfinished work
-    ↓
-Continue
-```
-
-Do NOT:
-
-- recreate existing files
-- rebuild completed features
-- restart completed phases
-- replace working architecture unnecessarily
-- delete working components because a different implementation is preferred
-- rewrite the project from scratch without explicit approval
-
----
-
 # 5. PROJECT STATE
 
 `PROJECT_STATE.md` is the primary implementation progress tracker.
-
-It MUST describe the current state.
 
 Minimum structure:
 
@@ -213,6 +244,11 @@ The repository MUST maintain:
 ```text
 RULES.md
 ARCHITECTURE.md
+AGENT_AUTONOMY.md
+AGENT_PROTOCOL.md
+EVIDENCE_SYSTEM.md
+PERMISSIONS.md
+EXPERIMENTS.md
 
 AUTONOMOUS_RESEARCH_EVIDENCE_ADDON.md
 SELF_MODIFICATION_ADDON.md
@@ -246,7 +282,7 @@ Additional documentation may be created when useful.
 
 ---
 
-# 7. IMPLEMENTATION WORKFLOW
+# 6. IMPLEMENTATION WORKFLOW
 
 Every meaningful implementation task follows:
 
@@ -394,7 +430,7 @@ Major architecture changes must not happen silently.
 
 ---
 
-# 13. KNOWN ISSUES
+# 11. KNOWN ISSUES
 
 Maintain `KNOWN_ISSUES.md`.
 
@@ -428,7 +464,7 @@ Do not hide failures.
 
 ---
 
-# 14. CORE ARCHITECTURE BOUNDARIES
+# 12. CORE ARCHITECTURE BOUNDARIES
 
 Respect these conceptual boundaries:
 
@@ -455,7 +491,7 @@ Do not place unrelated responsibilities into one module merely for convenience.
 
 ---
 
-# 15. EVENT-DRIVEN DESIGN
+# 8. EVENT-DRIVEN DESIGN
 
 The Event Bus is a central communication mechanism.
 
@@ -468,8 +504,8 @@ Agent / Tool / Control
         ↓
     Event Bus
         ↓
- ┌──────┼───────────┐
- ↓      ↓           ↓
+  ┌──────┼───────────┐
+  ↓      ↓           ↓
 Memory Evidence   CLI
         ↓
     Persistence
@@ -483,7 +519,7 @@ The system should not constantly consume CPU while idle.
 
 ---
 
-# 16. AGENT COMMUNICATION
+# 9. AGENT COMMUNICATION
 
 Agents communicate through structured messages/events.
 
@@ -508,16 +544,16 @@ Communication must be observable and persistable.
 
 ---
 
-# 17. CONTINUOUS A2A CONVERSATION
+# 10. CONTINUOUS A2A CONVERSATION
 
 The system should support:
 
 ```text
-Agent A
+Atlas
    ↕
 Event Bus
    ↕
-Agent B
+Argus
 ```
 
 with continuous conversation until:
@@ -533,7 +569,7 @@ Human interaction has priority.
 
 ---
 
-# 18. HUMAN CONTROL
+# 11. HUMAN CONTROL
 
 The human MUST be able to:
 
@@ -556,7 +592,7 @@ The emergency stop mechanism must remain available.
 
 ---
 
-# 19. TOOL GATEWAY
+# 12. TOOL GATEWAY
 
 Agents should access external capabilities through a Tool Gateway rather than directly coupling agent logic to every tool.
 
@@ -582,7 +618,7 @@ The gateway should provide:
 
 ---
 
-# 20. BROWSER RESEARCH
+# 12. BROWSER RESEARCH
 
 Browser research is a first-class capability.
 
@@ -590,23 +626,23 @@ Research flow:
 
 ```text
 Agent
- ↓
+  ↓
 Research request
- ↓
+  ↓
 Tool Gateway
- ↓
+  ↓
 Browser/Search
- ↓
+  ↓
 Source
- ↓
+  ↓
 Extract information
- ↓
+  ↓
 Evidence
- ↓
+  ↓
 Verification
- ↓
+  ↓
 Memory
- ↓
+  ↓
 Agent
 ```
 
@@ -629,7 +665,7 @@ External information MUST NOT silently become trusted knowledge.
 
 ---
 
-# 21. EVIDENCE PLANE
+# 13. EVIDENCE PLANE
 
 Agents must not be responsible for proving their own actions.
 
@@ -653,36 +689,7 @@ Evidence must survive memory summarization.
 
 ---
 
-# 22. MEMORY
-
-Memory is separate from raw event history.
-
-Conceptually:
-
-```text
-Raw Events
-    ↓
-Summarization / Selection
-    ↓
-Memory
-```
-
-Memory may contain:
-
-- session summaries
-- useful knowledge
-- open questions
-- decisions
-- verified research
-- important agent state
-
-Do NOT dump the entire database or conversation history into every model context.
-
-Retrieve only relevant information.
-
----
-
-# 23. EXPERIMENT SYSTEM
+# 13. EXPERIMENT SYSTEM
 
 Experiments must record:
 
@@ -706,7 +713,7 @@ Failure is information.
 
 ---
 
-# 24. PERMISSION SYSTEM
+# 14. PERMISSION SYSTEM
 
 Agents may request permissions.
 
@@ -735,7 +742,7 @@ Core safety controls cannot be bypassed by agents.
 
 ---
 
-# 25. RESOURCE MANAGEMENT
+# 15. RESOURCE MANAGEMENT
 
 The primary development environment is:
 
@@ -781,7 +788,7 @@ Do not solve every problem by using a larger model.
 
 ---
 
-# 26. MODEL RUNTIME
+# 14. MODEL RUNTIME
 
 The model layer MUST remain model-agnostic.
 
@@ -813,7 +820,7 @@ Do not hard-code the architecture around one model.
 
 ---
 
-# 27. CONCURRENCY
+# 15. CONCURRENCY
 
 Do not run every agent/model simultaneously by default.
 
@@ -831,7 +838,7 @@ The system should optimize for useful throughput and responsiveness, not maximum
 
 ---
 
-# 28. PERSISTENCE ARCHITECTURE
+# 16. PERSISTENCE ARCHITECTURE
 
 The persistence layer consists of three complementary systems:
 
@@ -850,52 +857,27 @@ Do not force one system to perform all three roles.
 
 ---
 
-# 29. SQLITE
+# 17. SQLITE
 
 SQLite is the default V1 database.
 
 Do NOT introduce PostgreSQL, Redis, or another database server unless actual requirements or benchmarks justify it.
 
-SQLite should store structured information such as:
+SQLite provides:
 
-```text
-sessions
-agents
-conversations
-messages
-events
-memory metadata
-research
-sources
-claims
-evidence metadata
-experiments
-experiment results
-permissions
-tool calls
-artifacts metadata
-resource metrics
-modification proposals
-checkpoints
-```
-
-The database should remain lightweight.
-
-Use:
-
-- migrations
+- zero database server
+- low resource overhead
+- local persistence
 - transactions
-- sensible indexes
-- bounded writes
-- WAL where appropriate
-- controlled connections
-- safe backups
-
-Do not load the entire database into model context.
+- reliable structured storage
+- easy backup
+- easy inspection
+- simple deployment
+- good Python support
 
 ---
 
-# 30. SQLITE + FILESYSTEM
+# 18. SQLITE + FILESYSTEM
 
 Large objects should remain outside SQLite when appropriate.
 
@@ -915,7 +897,7 @@ Do not store enormous blobs in SQLite merely for convenience.
 
 ---
 
-# 31. SQLITE + MEMORY
+# 19. SQLITE + MEMORY
 
 SQLite is the durable structured state/index layer.
 
@@ -923,16 +905,18 @@ Memory retrieval should be selective:
 
 ```text
 User request
- ↓
+  ↓
 Retriever
- ↓
+  ↓
 Relevant SQLite records
- ↓
+  ↓
 Relevant filesystem artifacts
- ↓
+  ↓
+Summarizer
+  ↓
 Compact context
- ↓
-Model
+  ↓
+LLM
 ```
 
 Do not introduce a vector database until the system demonstrates a real need.
@@ -941,7 +925,7 @@ SQLite FTS/structured retrieval may be sufficient initially.
 
 ---
 
-# 32. SQLITE + RECOVERY
+# 20. SQLITE + RECOVERY
 
 Persist enough state to recover interrupted sessions.
 
@@ -949,29 +933,25 @@ Recovery flow:
 
 ```text
 Process starts
- ↓
+  ↓
 Open SQLite
- ↓
+  ↓
 Find incomplete sessions
- ↓
+  ↓
 Read latest checkpoint
- ↓
+  ↓
 Validate Git state
- ↓
+  ↓
 Restore agent/session state
- ↓
+  ↓
 Restore pending tasks
- ↓
+  ↓
 Resume or request human decision
 ```
 
-Database failure must not be silently ignored.
-
-Critical evidence must not be silently lost.
-
 ---
 
-# 33. EXPERIMENTS + DATABASE
+# 20. EXPERIMENTS + DATABASE
 
 Experiment metadata belongs in SQLite.
 
@@ -983,992 +963,348 @@ The experiment record should connect:
 
 ```text
 Experiment
- ↓
+  ↓
 Session
- ↓
+  ↓
 Agent
- ↓
+  ↓
 Git commit/branch
- ↓
+  ↓
 Artifacts
- ↓
+  ↓
 Metrics
- ↓
+  ↓
 Result
 ```
 
 ---
 
-# 34. SELF-MODIFICATION
+# 21. TRANSACTIONS
 
-Self-modification follows:
-
-```text
-OBSERVE
- ↓
-IDENTIFY PROBLEM
- ↓
-RESEARCH
- ↓
-HYPOTHESIS
- ↓
-PROPOSE
- ↓
-ISOLATE
- ↓
-MODIFY
- ↓
-TEST
- ↓
-BENCHMARK
- ↓
-DOCUMENT
- ↓
-HUMAN APPROVAL
- ↓
-APPLY
- ↓
-MONITOR
- ↓
-ROLLBACK IF NECESSARY
-```
-
-Self-modification must use isolated Git branches/worktrees.
-
-Before risky modification:
-
-```text
-Known-good commit
-+
-Modification ID
-+
-Experiment record
-+
-Baseline metrics
-```
-
-The live system should not be casually rewritten by an agent.
-
----
-
-# 35. CORE CONTROLS THAT SELF-MODIFICATION CANNOT REMOVE
-
-Agents MUST NOT autonomously disable or remove:
-
-- human interruption
-- emergency shutdown
-- permission gateway
-- evidence logging
-- audit logging
-- rollback
-- resource manager
-- sandbox boundaries
-
-Changes to these require explicit human approval.
-
----
-
-# 36. GITHUB ENGINEERING LAYER
-
-Git/GitHub is a permanent engineering history layer.
-
-Normal workflow:
-
-```text
-Inspect
- ↓
-Branch
- ↓
-Implement
- ↓
-Test
- ↓
-Document
- ↓
-Commit
- ↓
-Push
- ↓
-PR when useful
- ↓
-Human review when required
- ↓
-Merge
-```
-
-Use meaningful branches:
-
-```text
-feature/...
-fix/...
-research/...
-experiment/...
-self-modification/...
-```
-
-Do not work directly on `main` for risky experiments.
-
----
-
-# 37. GIT COMMIT RULES
-
-Before committing:
-
-```text
-git status
-git diff
-```
-
-Verify:
-
-- intended files only
-- no secrets
-- no credentials
-- no accidental large files
-- no temporary debug artifacts
-- tests pass
-- documentation is updated
-
-Commit messages should explain the change:
-
-```text
-feat: add browser evidence pipeline
-fix: handle model timeout
-test: add agent interruption tests
-perf: reduce repeated context serialization
-docs: update research architecture
-```
-
-Do not use meaningless messages such as:
-
-```text
-update
-stuff
-final2
-changes
-```
-
----
-
-# 38. GITHUB SECURITY
-
-Never commit:
-
-- passwords
-- API keys
-- access tokens
-- SSH private keys
-- browser cookies
-- authentication data
-- personal/private data
-- secret `.env` files
-
-Maintain a correct `.gitignore`.
-
-Do not log secrets into:
-
-- SQLite
-- evidence
-- Git
-- GitHub
-- model context
-
-If a secret is accidentally exposed:
-
-1. Stop.
-2. Do not continue pushing.
-3. Inform the human.
-4. Rotate/revoke the secret.
-5. Clean up appropriately.
-
----
-
-# 39. PROTECTED GIT/GITHUB OPERATIONS
-
-Require explicit authorization for:
-
-- force push
-- rewriting public history
-- deleting important branches
-- deleting repository
-- changing visibility
-- changing ownership
-- changing collaborators
-- changing repository security
-- deleting important issues/releases
-- destructive cleanup
-
-Do not assume permission.
-
----
-
-# 40. PULL REQUESTS
-
-Meaningful changes may use PRs.
-
-PRs should explain:
-
-```text
-What changed
-Why
-Architecture impact
-Tests
-Performance
-Risks
-Evidence
-Rollback plan
-```
-
-Self-modification PRs should additionally include:
-
-```text
-Modification ID
-Baseline commit
-Hypothesis
-Change
-Benchmark
-Result
-Decision
-```
-
----
-
-# 41. GITHUB ISSUES
-
-Use issues for significant:
-
-- bugs
-- research questions
-- architectural decisions
-- experiments
-- long-running tasks
-- blockers
-
-Do not create unnecessary issue noise.
-
-Useful labels:
-
-```text
-bug
-feature
-research
-experiment
-performance
-architecture
-security
-documentation
-self-modification
-blocked
-```
-
----
-
-# 42. GITHUB AS AGENT HANDOFF
-
-A future coding agent should be able to reconstruct the project using:
-
-```text
-RULES.md
-ARCHITECTURE.md
-Addons
-PROJECT_STATE.md
-CHANGELOG.md
-DECISIONS.md
-KNOWN_ISSUES.md
-IMPLEMENTATION_LOG.md
-Git history
-GitHub Issues
-GitHub PRs
-Experiment records
-SQLite state
-```
-
-The repository is the persistent handoff mechanism.
-
-A future agent should not need the previous AI conversation.
-
----
-
-# 43. CLI-FIRST INTERFACE
-
-The core engine MUST NOT depend on a web UI.
-
-CLI should eventually support:
-
-```text
-start
-watch
-interactive
-status
-agents
-pause
-resume
-stop
-sessions
-session
-memory
-research
-evidence
-experiments
-permissions
-approve
-deny
-resources
-logs
-timeline
-report
-modifications
-rollback
-inject
-db
-help
-```
-
-A future web interface should consume the same core services.
-
----
-
-# 44. VOICE
-
-Voice is an interface layer:
-
-```text
-Microphone
- ↓
-STT
- ↓
-Event Bus
- ↓
-Agents
- ↓
-TTS
- ↓
-Speaker
-```
-
-Voice must not become a dependency of the core runtime.
-
-The user should still be able to operate the system entirely through CLI.
-
----
-
-# 45. ERROR HANDLING
-
-Never silently swallow exceptions.
-
-Record when appropriate:
-
-```text
-timestamp
-component
-operation
-error
-context
-recovery action
-final state
-```
-
-Prefer graceful degradation.
-
-If one agent fails, the whole system should not necessarily crash.
-
-If browser research fails, agents should continue where possible.
-
----
-
-# 46. RECOVERY
-
-The system should recover from:
-
-- model failures
-- tool failures
-- browser failures
-- agent crashes
-- malformed responses
-- database failures
-- process interruption
-- machine restart
-- incomplete sessions
-
-Persist important state incrementally.
-
-Do not wait until shutdown.
-
----
-
-# 47. TESTING
-
-Before marking a feature complete:
-
-```text
-Unit test
-+
-Integration test
-+
-Runtime test
-+
-Failure test
-```
-
-For critical components also test:
-
-- interruption
-- recovery
-- malformed input
-- concurrency
-- resource pressure
-- persistence failure
-
----
-
-# 48. PERFORMANCE BENCHMARKING
-
-For important changes, compare before and after when measurable.
-
-Record:
-
-```text
-RAM
-CPU
-GPU
-inference latency
-tokens/sec
-context tokens
-tool latency
-database latency
-error rate
-task completion
-stability
-```
-
-Do not claim a performance improvement without evidence when measurement is available.
-
----
-
-# 49. NO PREMATURE COMPLEXITY
-
-The first system should remain:
-
-- local
-- understandable
-- testable
-- lightweight
-
-Do not add:
-
-- Kubernetes
-- distributed infrastructure
-- unnecessary microservices
-- PostgreSQL
-- vector databases
-- complex orchestration frameworks
-
-unless real requirements justify them.
-
----
-
-# 50. SECURITY + FILESYSTEM
-
-Agents should work inside the designated project/sandbox area by default.
-
-Operations outside the expected workspace should go through the permission system where required.
-
-Never allow arbitrary destructive filesystem operations without appropriate controls.
-
----
-
-# 51. EXTERNAL ACTIONS
-
-Distinguish:
-
-```text
-READ
-WRITE
-EXTERNAL ACTION
-```
-
-External actions such as:
-
-- sending messages
-- uploading data
-- submitting forms
-- installing software
-- changing network settings
-- interacting with external accounts
-
-should be permission-controlled according to the project's permission policy.
-
----
-
-# 52. AUTONOMOUS RESEARCH
-
-Agents may independently research problems using browser/search tools.
-
-Research should produce:
-
-```text
-Question
- ↓
-Search
- ↓
-Sources
- ↓
-Extracted information
- ↓
-Claims
- ↓
-Verification
- ↓
-Conclusion
- ↓
-Evidence record
- ↓
-Memory
-```
-
-Research is not complete merely because an agent found an answer.
-
-Important claims should be traceable to evidence.
-
----
-
-# 53. DOCUMENTATION AS PROOF
-
-The system should maintain a permanent research/engineering record.
-
-For every important activity, preserve where appropriate:
-
-```text
-What happened
-When
-Which agent
-Why
-What tool was used
-What was discovered
-What evidence supports it
-What decision was made
-What changed
-What result occurred
-```
-
-Audio is optional.
-
-Written records are the canonical proof.
-
----
-
-# 54. SESSION MODEL
-
-Every system run should have an `Experiment Session` or equivalent session record.
+Use SQLite transactions for related state changes.
 
 Example:
 
 ```text
-Session #001
-
-├── Start state
-├── Participants/models
-├── Configuration
-├── Conversation
-├── Decisions
-├── Tool calls
-├── Permission requests
-├── Research
-├── Experiments
-├── Evidence
-├── Artifacts
-├── Results
-├── Discoveries
-└── Final report
+Agent action
+    ↓
+Create event
+    ↓
+Create tool call
+    ↓
+Update agent state
 ```
 
-The user should be able to inspect a session later.
+These should be persisted consistently where appropriate.
+
+Avoid partially recorded state.
 
 ---
 
-# 55. SESSION CHECKPOINTING
+# 22. EVENT WRITE PERFORMANCE
 
-Long-running sessions should checkpoint state incrementally.
+The Event Bus should not block agent inference unnecessarily.
 
-Checkpoint should reference:
+Prefer:
 
 ```text
-SQLite state
-Git commit
-Active agents
-Pending work
-Experiments
-Configuration
-Important artifacts
+Agent
+  ↓
+Event
+  ↓
+Event queue
+  ↓
+Persistence worker
+  ↓
+SQLite
 ```
 
-A session must not depend entirely on process memory.
+However, events that are required for correctness or security should be persisted before treating the action as successfully recorded.
+
+Use appropriate durability semantics rather than blindly making every event synchronous.
 
 ---
 
-# 56. AGENT SELF-OBSERVATION
+# 21. DATABASE FAILURE
 
-Agents may observe system state, but the Evidence Plane must remain independent.
+The system must handle database failures gracefully.
 
-Do not allow an agent to fabricate or rewrite its own historical evidence.
+If SQLite becomes temporarily unavailable:
 
-Agent claims are not automatically facts.
+1. Record the failure.
+2. Prevent silent loss of critical evidence.
+3. Use a bounded temporary event buffer where appropriate.
+4. Retry safely.
+5. Surface the problem to the Control Plane.
+6. Avoid uncontrolled memory growth.
+
+The system should not silently continue as if persistence succeeded.
 
 ---
 
-# 57. AGENT SELF-MODIFICATION
+# 22. DATABASE BACKUPS
 
-Agents may eventually propose changes to their own code according to `SELF_MODIFICATION_ADDON.md`.
+Support simple database backup.
 
-However:
+Example concept:
 
 ```text
-Proposal ≠ Applied change
+data/backups/
+└── sandbox_2026-08-26_060000.db
 ```
 
-Every modification must have:
+Backups should be:
+
+- explicit
+- timestamped
+- verifiable
+- excluded from Git unless intentionally committed
+
+The exact backup mechanism should use SQLite-safe backup behavior rather than simply copying an actively written database file when that could produce an inconsistent snapshot.
+
+---
+
+# 22. DATABASE INSPECTION
+
+Provide a CLI command:
 
 ```text
-Reason
-Hypothesis
-Isolation
-Implementation
-Tests
-Benchmark
-Evidence
-Decision
-Git checkpoint
+/db
 ```
 
----
+or equivalent.
 
-# 58. RESOURCE-AWARE DEVELOPMENT
-
-The coding agents themselves must also respect the M4 16 GB environment.
-
-Avoid unnecessarily:
-
-- starting multiple heavy services
-- running duplicate model instances
-- running large tests repeatedly
-- leaving processes running
-- generating huge logs
-- repeating identical model calls
-- rebuilding unnecessary components
-
-Prefer targeted tests and incremental verification.
-
----
-
-# 59. IMPLEMENTATION PHASES
-
-Recommended order:
+Possible commands:
 
 ```text
-Phase 1 — Foundation
-[ ] project structure
-[ ] configuration
-[ ] event schemas
-[ ] event bus
-
-Phase 2 — Model Runtime
-[ ] Ollama adapter
-[ ] model abstraction
-[ ] generation pipeline
-
-Phase 3 — Agent Runtime
-[ ] base agent
-[ ] A2A messages
-[ ] continuous A/B conversation
-
-Phase 4 — Control + CLI
-[ ] control plane
-[ ] interruption
-[ ] pause/resume
-[ ] CLI
-
-Phase 5 — Persistence
-[ ] SQLite
-[ ] migrations
-[ ] sessions
-[ ] events
-[ ] messages
-[ ] checkpoints
-
-Phase 6 — Memory + Evidence
-[ ] memory
-[ ] evidence plane
-[ ] provenance
-[ ] research journal
-
-Phase 7 — Tools
-[ ] terminal
-[ ] filesystem
-[ ] browser
-[ ] permission gateway
-
-Phase 8 — Resource Management
-[ ] RAM monitoring
-[ ] inference metrics
-[ ] scheduling
-[ ] model routing
-
-Phase 9 — Voice
-[ ] STT
-[ ] TTS
-[ ] interruption
-
-Phase 10 — Experiments
-[ ] experiment system
-[ ] benchmarks
-[ ] artifact management
-
-Phase 11 — Git/GitHub
-[ ] branch workflow
-[ ] automated checks
-[ ] issue/PR integration
-[ ] release workflow
-
-Phase 12 — Self-Modification
-[ ] proposals
-[ ] isolated worktrees
-[ ] tests
-[ ] benchmarks
-[ ] approval
-[ ] rollback
-
-Phase 13 — Advanced A2A
-[ ] protocol
-[ ] agent discovery
-[ ] scalable routing
-
-Phase 14 — Future Interface
-[ ] API
-[ ] optional web UI
+/db status
+/db sessions
+/db events
+/db research
+/db evidence
+/db experiments
+/db backup
 ```
 
-The agent may change the order when justified, but MUST document why.
+The user should be able to inspect database health without opening SQLite manually.
 
 ---
 
-# 60. CONTINUATION PROTOCOL
+# 23. MIGRATIONS
 
-When a new agent starts:
+Database schema changes MUST be versioned.
+
+Use a migration system rather than modifying production schema manually.
+
+Example:
 
 ```text
-1. Read RULES.md
-2. Read PROJECT_STATE.md
-3. Read relevant addons
-4. Inspect repository
-5. Inspect Git status/history
-6. Inspect SQLite/database state if relevant
-7. Run relevant tests
-8. Identify exact next task
-9. Implement
-10. Test
-11. Document
-12. Checkpoint
-13. Continue
+migrations/
+├── 001_initial.sql
+├── 002_add_research.sql
+├── 003_add_experiments.sql
+├── 004_add_resource_metrics.sql
 ```
 
-Do not ask:
+The exact migration framework may be chosen by the implementation agent.
 
-> What were we building?
-
-The repository should answer it.
+Never silently change the schema without a migration/checkpoint.
 
 ---
 
-# 61. WHEN USER SAYS "CONTINUE"
+# 22. DATABASE + GIT
 
-Interpret:
+The database itself should normally remain local.
 
-> continue
-
-as:
+Git tracks:
 
 ```text
-Read rules
- ↓
-Read project state
- ↓
-Inspect repository
- ↓
-Inspect Git
- ↓
-Inspect database state if relevant
- ↓
-Identify highest-priority unfinished task
- ↓
-Implement
- ↓
-Test
- ↓
-Document
- ↓
-Update state
- ↓
-Checkpoint
- ↓
-Continue
-```
-
----
-
-# 62. WHEN USER SAYS "READ RULES"
-
-Immediately:
-
-```text
-Read RULES.md
-Read PROJECT_STATE.md
-Read relevant architecture/addons
-Inspect repository
-Continue from current state
-```
-
-Do not respond with a generic explanation.
-
-Perform the work.
-
----
-
-# 63. AMBIGUITY
-
-When something is unclear, search the repository first:
-
-```text
-RULES
-ARCHITECTURE
-addons
-PROJECT_STATE
-DECISIONS
-KNOWN_ISSUES
-source
-tests
-Git history
-```
-
-Only ask the human when:
-
-- a genuine product decision is required
-- a permission is required
-- an ambiguous destructive action is involved
-- the repository does not contain enough information
-
----
-
-# 64. AGENT FAILURE LOOP
-
-If the same problem is attempted repeatedly without progress:
-
-1. Stop repeating the same strategy.
-2. Document the failed approach.
-3. Inspect assumptions.
-4. Create a smaller reproducible test.
-5. Change strategy.
-6. Measure the new approach.
-7. Ask the human only if necessary.
-
-Do not waste model inference and machine resources repeating identical failed attempts.
-
----
-
-# 65. END-OF-SESSION PROTOCOL
-
-Before stopping or handing work to another agent, update:
-
-```text
-PROJECT_STATE.md
-IMPLEMENTATION_LOG.md
-CHANGELOG.md
-KNOWN_ISSUES.md
-DECISIONS.md
-```
-
-If database/schema changes occurred:
-
-```text
+schema
 migrations
-database documentation
-PROJECT_STATE
+database access code
+models
 ```
 
-If Git changes occurred:
+Git should generally NOT track:
 
 ```text
-branch
-commit
-status
-handoff
+runtime database
+runtime sessions
+large evidence
+personal/private data
+secrets
 ```
 
-Then write:
+This separation keeps GitHub clean and prevents accidental publication of private runtime information.
 
-```markdown
-## Handoff
+---
 
-Completed:
-...
+# 23. DATABASE + MEMORY
 
-Current state:
-...
+Memory retrieval should use SQLite as the durable index/state layer.
 
-Known issues:
-...
+A future vector database is OPTIONAL.
 
-Next exact task:
-...
+Do not introduce a vector database simply because it is common in AI applications.
 
-Relevant files:
-...
+First determine whether:
 
-Relevant commit:
-...
+- SQLite FTS
+- structured metadata
+- embeddings stored/referenced appropriately
+- filesystem documents
 
-Database state:
-...
+are sufficient.
 
-Test command:
-...
+Only introduce another database when measurements demonstrate the need.
 
-Expected next step:
-...
+---
+
+# 24. DATABASE + MODEL CONTEXT
+
+The database must NOT be dumped wholesale into model context.
+
+Use:
+
+```text
+User/Agent request
+        ↓
+Retriever
+        ↓
+Relevant SQLite records
+        ↓
+Relevant filesystem artifacts
+        ↓
+Summarizer
+        ↓
+Compact context
+        ↓
+LLM
+```
+
+This is critical for the M4 16 GB environment.
+
+The database is a knowledge source, not the model's context window.
+
+---
+
+# 24. RESOURCE EFFICIENCY
+
+SQLite itself should remain lightweight.
+
+Avoid:
+
+- excessive polling
+- storing duplicate content
+- high-frequency unnecessary metrics
+- unbounded event payloads
+- repeated serialization of identical data
+- loading the entire database into memory
+
+Use indexes for frequently queried fields.
+
+Periodically evaluate database size and query performance.
+
+---
+
+# 25. DATA RETENTION
+
+The system should eventually support configurable retention policies.
+
+For example:
+
+```text
+Critical evidence
+→ retain indefinitely
+
+Session events
+→ retain indefinitely by default
+
+High-frequency resource metrics
+→ optionally downsample/archive
+
+Temporary tool results
+→ configurable retention
+```
+
+Do not delete historical evidence automatically without an explicit retention policy.
+
+---
+
+# 26. RECOVERY FLOW
+
+The updated recovery architecture:
+
+```text
+Process starts
+      ↓
+Open SQLite
+      ↓
+Find incomplete sessions
+      ↓
+Read latest checkpoint
+      ↓
+Validate Git state
+      ↓
+Restore session state
+      ↓
+Restore agent state
+      ↓
+Restore pending tasks
+      ↓
+Resume or ask human
 ```
 
 ---
 
-# 66. GITHUB HANDOFF
-
-Another coding agent should be able to continue using:
+# 27. UPDATED PERSISTENCE RESPONSIBILITIES
 
 ```text
-RULES.md
-PROJECT_STATE.md
-ARCHITECTURE.md
-addons
-Git history
-GitHub Issues/PRs
-SQLite state
-implementation logs
+SQLite
+→ structured state and relationships
+
+Filesystem
+→ large artifacts and raw content
+
+Git
+→ source code and engineering history
+
+GitHub
+→ remote development history
 ```
 
-The system should not depend on a single AI provider.
-
-The project must remain transferable between:
-
-```text
-Claude Code
-Codex
-OpenCode
-Cursor
-Antigravity
-other coding agents
-```
+No single storage system should be forced to perform every role.
 
 ---
 
-# 67. FINAL ENGINEERING PRINCIPLE
+# 28. ACCEPTANCE CRITERIA
+
+SQLite integration is complete only when:
+
+- [ ] SQLite database exists.
+- [ ] Schema is versioned.
+- [ ] Migrations work.
+- [ ] Sessions persist.
+- [ ] Agent messages persist.
+- [ ] Events persist.
+- [ ] Evidence metadata persists.
+- [ ] Research metadata persists.
+- [ ] Experiments persist.
+- [ ] Permissions persist.
+- [ ] Tool calls persist.
+- [ ] Resource metrics persist at a sensible rate.
+- [ ] Modification records persist.
+- [ ] Checkpoints persist.
+- [ ] Database failures are handled.
+- [ ] Database backups work.
+- [ ] CLI can inspect database health.
+- [ ] Runtime database is excluded from Git by default.
+- [ ] Database access does not become a major source of CPU/RAM overhead.
+- [ ] Relevant tests cover persistence and recovery.
+
+---
+
+# FINAL ENGINEERING PRINCIPLE
 
 The system should evolve through:
 
@@ -1998,81 +1334,32 @@ Optimize for:
 
 ```text
 useful intelligence
-+
-good orchestration
-+
-good tools
-+
-good memory
-+
-good evidence
-+
-good research
-+
-good engineering
-+
-resource efficiency
-+
-recoverability
 ```
 
 ---
 
-# 68. DEFAULT INSTRUCTION FOR EVERY FUTURE CODING AGENT
+# AGENT AUTONOMY PRINCIPLES (Summary)
 
-Treat this as the default operating instruction:
-
-> Read `RULES.md`, then read `PROJECT_STATE.md`, `ARCHITECTURE.md`, and all relevant addon documents. Inspect the actual repository, Git state, tests, and database state when relevant. Do not restart or recreate completed work. Determine the highest-priority unfinished task. Implement it incrementally. Test it. Measure important behavior. Update documentation, project state, database migrations when necessary, and Git history. Preserve evidence and rollback capability. Then provide a clear handoff and continue to the next task when appropriate.
-
----
-
-# 69. ACCEPTANCE CRITERIA FOR THE OVERALL PROJECT
-
-The project is progressing correctly when:
-
-- [ ] Agents can communicate through structured events.
-- [ ] Human can interrupt/control them.
-- [ ] Browser research is traceable.
-- [ ] Evidence is independently logged.
-- [ ] Memory is persistent and selective.
-- [ ] Sessions are recoverable.
-- [ ] SQLite stores structured runtime state.
-- [ ] Filesystem stores large artifacts.
-- [ ] Git stores engineering history.
-- [ ] GitHub provides remote continuity.
-- [ ] Resource usage is observable.
-- [ ] Model usage is resource-aware.
-- [ ] Experiments are reproducible where practical.
-- [ ] Self-modification is isolated and reversible.
-- [ ] Permissions are auditable.
-- [ ] Documentation survives agent changes.
-- [ ] A new coding agent can continue without the previous conversation.
-- [ ] The system remains usable on the M4 16 GB development machine.
+1. **No fixed roles** — Agents self-determine roles
+2. **Self-determination loop** — Observe → Plan → Request → Execute → Evaluate
+3. **Capability registry** — Agents discover and choose capabilities
+4. **Delegation** — Agents delegate to each other
+5. **Emergence observation** — System records, doesn't direct
+6. **Intent vs Action** — Evidence records both
+7. **Permission/Resource gates** — Autonomy within boundaries
+6. **No fixed roles** — Roles emerge and change
+7. **Emergence observation** — System records, doesn't direct
+8. **Intent vs Action** — Evidence records both
+9. **Permission/Resource gates** — Autonomy within boundaries
+10. **No contamination** — No prompts that bias behavior
+11. **Evidence records truth** — Agents don't prove themselves
+12. **Self-modification is controlled** — Propose → Isolate → Test → Approve → Apply → Monitor → Rollback
+13. **Evidence survives** — Survives summarization, rollback, crashes
 
 ---
 
-# FINAL RULE
+# FINAL NOTE
 
-**Do not treat this project as a sequence of AI-generated code dumps.**
+The documentation is the contract. The code is the implementation. The tests are the verification. The logs are the evidence. The Git history is the history.
 
-Treat it as a continuously evolving engineered system.
-
-Every important cycle must leave behind:
-
-```text
-Working code
-+
-Tests
-+
-Evidence
-+
-Documentation
-+
-Persistent state
-+
-Git history
-+
-Recoverable checkpoint
-```
-
-The repository itself is the long-term memory of the project.
+When in doubt: read the docs, inspect the code, run the tests, check the logs, then decide.

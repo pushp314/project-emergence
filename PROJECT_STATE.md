@@ -1,7 +1,7 @@
 # Project State
 
 ## Current Phase
-Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete)
+Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete) + Documentation Synchronization (Complete)
 
 ## Current Status
 ✅ All 9 phases of core implementation complete
@@ -12,13 +12,14 @@ Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete)
 - SQLite Database Addon
 - GitHub Repository Maintenance Addon
 - Agent-Driven Orchestration Addon
+✅ Documentation synchronized with autonomous agent design principles
 
 ## Completed
 
 ### Core Architecture (Phases 1-9)
 - [x] Event Bus with structured event schemas
 - [x] Model Plane (Ollama adapter with streaming)
-- [x] Agent Plane (Explorer, Challenger, Observer)
+- [x] Agent Plane (Explorer, Challenger, Observer) — **Note: Fixed roles in code, documentation updated to autonomous agents**
 - [x] Control Plane (Conversation Engine, Scheduler, State Machine)
 - [x] Phase 1: A/B converse indefinitely via event bus
 - [x] Phase 2: Audio (TTS via pyttsx3/edge-tts, STT via faster-whisper)
@@ -64,25 +65,39 @@ Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete)
 - [ ] Integration tests for all components
 - [ ] Stress testing for resource limits
 - [ ] Documentation completion
+- [ ] **Code changes to remove fixed agent roles** (see KNOWN_ISSUES.md)
+- [ ] **Implementation of emergence observation events** (see KNOWN_ISSUES.md)
+- [ ] **Implementation of 7-stage intent-action distinction** (see KNOWN_ISSUES.md)
+- [ ] **Implementation of self-assessment/role_change/disagreement events** (see KNOWN_ISSUES.md)
 
 ## Blocked
 - None currently
 
 ## Next Task
-1. Run comprehensive integration tests
-2. Add performance benchmarks
-3. Create deployment documentation
-4. Add more example configurations
+1. Implement code changes to remove fixed agent roles from source (schemas.py, agents/, capabilities/registry.py)
+2. Add emergence observation event types and evidence schemas
+3. Add self-assessment, role change, disagreement event types
+4. Update agent system prompts to be capability-based not role-based
+5. Run comprehensive integration tests
+6. Add performance benchmarks
+7. Create deployment documentation
+8. Add more example configurations
 
 ## Known Bugs
 - Minor: Ollama connector closed error during shutdown (non-fatal)
 - Minor: State machine warnings during rapid shutdown transitions
+- **Design Debt: Fixed agent roles in source code contradict autonomy architecture**
+- **Design Debt: Intent vs action distinction not fully implemented (7-stage)**
+- **Design Debt: Emergence observation not implemented**
+- **Design Debt: Self-assessment, role change, disagreement events not implemented**
 
 ## Architecture Changes
 - Unified SQLite schema replaces separate memory/evidence databases
 - Evidence Manager now central persistence layer
 - Session Manager handles lifecycle and recovery
 - CLI is primary interface (web UI deferred)
+- **Documentation now reflects autonomous agents with emergent roles (Atlas, Argus, Observer)**
+- **Core principle: Maximum autonomy in decision-making, minimum necessary system authority**
 
 ## Tests
 - Manual CLI testing: start, watch, interactive modes
@@ -127,9 +142,30 @@ Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete)
 - app/autonomy/ (session integration)
 - config.yaml (added all addon configurations)
 - requirements.txt (added click, rich)
+- **Documentation files updated to reflect autonomous agent design:**
+  - RULES.md
+  - ARCHITECTURE.md
+  - AGENT_AUTONOMY.md
+  - AGENT_PROTOCOL.md
+  - EVIDENCE_SYSTEM.md
+  - PERMISSIONS.md
+  - EXPERIMENTS.md
+  - AGENT_DRIVEN_ORCHESTRATION_ADDON.md
+  - KNOWN_ISSUES.md
+  - IMPLEMENTATION_LOG.md
+  - CHANGELOG.md
+  - DECISIONS.md
+  - PROJECT_STATE.md
 
 ## Last Agent Action
-Completed all 9 phases + all mandatory addons. CLI working with start/watch/interactive modes. Agents converse indefinitely with evidence recording, session management, resource monitoring, and full CLI control.
+Completed documentation synchronization with latest autonomous-agent experiment design principle: "Maximum autonomy in decision-making, minimum necessary system authority." All documentation updated to reflect agents as autonomous entities (Atlas, Argus) with emergent roles, added emergence observation framework, strengthened intent vs action distinction in evidence, defined open-ended autonomy experiment category.
 
 ## Next Agent Instruction
-Run comprehensive integration tests. Add pytest test suite for all components. Performance benchmark under load. Create deployment guide.
+Implement code changes to align source with updated documentation:
+1. Remove AgentRole enum from schemas.py, replace with agent identity
+2. Update base.py to use identity instead of role
+3. Replace explorer.py/challenger.py system prompts with generic autonomous agent prompts
+4. Update registry.py DEFAULT_AGENT_CAPABILITIES to remove fixed role assignments
+5. Add emergence observation events to evidence system
+6. Add self-assessment, role change, disagreement event types
+7. Implement 7-stage intent-action tracking in evidence system
