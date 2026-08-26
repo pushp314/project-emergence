@@ -261,8 +261,151 @@ async def _handle_command(app: SandboxApp, command: str):
         _toggle_tts(app)
     elif cmd in ("/join",):
         console.print("[green]You are now in the conversation. Type your message:[/green]")
+    elif cmd in ("/db",):
+        subcommand = args[0] if args else None
+        await _handle_db_command(app, subcommand)
     else:
         console.print(f"[red]Unknown command: {cmd}[/red]")
+
+
+async def _handle_db_command(app: SandboxApp, subcommand: Optional[str]):
+    if not subcommand:
+        console.print("[red]Usage: /db <subcommand>[/red]")
+        console.print("  /db health   - Database health check")
+        console.print("  /db backup   - Create database backup")
+        console.print("  /db sessions - List sessions from database")
+        console.print("  /db events   - Show recent events")
+        console.print("  /db tables   - Show table names and row counts")
+        console.print("  /db size     - Show database file size")
+        return
+
+    subcommand = subcommand.lower()
+
+    if subcommand == "health":
+        await _db_health(app)
+    elif subcommand == "backup":
+        await _db_backup(app)
+    elif subcommand == "sessions":
+        await _db_sessions(app)
+    elif subcommand == "events":
+        await _db_events(app)
+    elif subcommand == "tables":
+        await _db_tables(app)
+    elif subcommand == "size":
+        await _db_size(app)
+    else:
+        console.print(f"[red]Unknown /db subcommand: {subcommand}[/red]")
+
+
+async def _db_health(app: SandboxApp):
+    try:
+        health = app.evidence_manager.get_db_health()
+        table = Table(title="Database Health")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="white")
+
+        table.add_row("Integrity", "OK" if health.get("integrity_ok") else "FAILED")
+        table.add_row("WAL Mode", str(health.get("wal_mode", False)))
+        table.add_row("Tables", str(health.get("table_count", 0)))
+        for name, count in health.get("row_counts", {}).items():
+            table.add_row(f"  {name}", str(count))
+
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Error checking health: {e}[/red]")
+
+
+async def _db_backup(app: SandboxApp):
+    try:
+        path = app.evidence_manager.backup()
+        console.print(f"[green]Backup created: {path}[/green]")
+    except Exception as e:
+        console.print(f"[red]Backup failed: {e}[/red]")
+
+
+async def _db_sessions(app: SandboxApp):
+    try:
+        store = app.conversation_engine.context_manager.store
+        with store._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT conversation_id FROM conversations ORDER BY rowid DESC LIMIT 20"
+            ).fetchall()
+
+        if not rows:
+            console.print("[yellow]No sessions in database[/yellow]")
+            return
+
+        table = Table(title="Database Sessions")
+        table.add_column("Session ID", style="cyan")
+        for row in rows:
+            table.add_row(row[0])
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Error listing sessions: {e}[/red]")
+
+
+async def _db_events(app: SandboxApp):
+    try:
+        events = app.evidence_manager.get_timeline(limit=20)
+        if not events:
+            console.print("[yellow]No events found[/yellow]")
+            return
+
+        table = Table(title="Recent Events (Evidence DB)")
+        table.add_column("Time", style="cyan")
+        table.add_column("Type", style="white")
+        table.add_column("Agent", style="white")
+        table.add_column("Intent", style="white")
+
+        for e in events:
+            table.add_row(
+                e.get("timestamp", "")[11:19],
+                e.get("event_type", ""),
+                e.get("agent_id", ""),
+                (e.get("intent", "") or "")[:30],
+            )
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Error listing events: {e}[/red]")
+
+
+async def _db_tables(app: SandboxApp):
+    try:
+        health = app.evidence_manager.get_db_health()
+        row_counts = health.get("row_counts", {})
+
+        table = Table(title="Database Tables")
+        table.add_column("Table", style="cyan")
+        table.add_column("Rows", style="white")
+
+        for name, count in row_counts.items():
+            table.add_row(name, str(count))
+
+        if not row_counts:
+            table.add_row("(none)", "-")
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Error listing tables: {e}[/red]")
+
+
+async def _db_size(app: SandboxApp):
+    try:
+        store = app.conversation_engine.context_manager.store
+        db_path = Path(store.db_path)
+        if db_path.exists():
+            size = db_path.stat().st_size
+            if size < 1024:
+                size_str = f"{size} B"
+            elif size < 1024 * 1024:
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size / (1024 * 1024):.1f} MB"
+            console.print(f"[bold]Database:[/bold] {db_path}")
+            console.print(f"[bold]Size:[/bold]     {size_str}")
+        else:
+            console.print(f"[yellow]Database file not found: {db_path}[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error checking size: {e}[/red]")
 
 
 def _toggle_tts(app: SandboxApp):
@@ -304,6 +447,14 @@ def _show_help():
   /resources         Show resource usage
   /logs              Show logs
   /report            Generate report
+
+[bold]Database:[/bold]
+  /db health         Database health check (integrity, WAL, row counts)
+  /db backup         Create a database backup
+  /db sessions       List sessions from database
+  /db events         Show recent events from evidence database
+  /db tables         Show table names and row counts
+  /db size           Show database file size
 """
     console.print(Panel(help_text, title="Help", border_style="blue"))
 
