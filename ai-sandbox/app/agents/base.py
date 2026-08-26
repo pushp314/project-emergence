@@ -62,6 +62,9 @@ class BaseAgent(ABC):
             role = "assistant" if msg.agent_id == self.agent_id else "user"
             messages.append({"role": role, "content": f"[{msg.agent_identity}] {msg.content}"})
         
+        if not context.recent_messages:
+            messages.append({"role": "user", "content": "Start a conversation. Pick a fascinating topic and share your first thoughts."})
+        
         request = GenerationRequest(
             messages=messages,
             max_tokens=self.config.max_tokens,
