@@ -387,6 +387,9 @@ class BaseAgent(ABC):
             role = "assistant" if msg.agent_id == self.agent_id else "user"
             messages.append({"role": role, "content": f"[{msg.agent_identity}] {msg.content}"})
         
+        if not context.recent_messages:
+            messages.append({"role": "user", "content": "Start a conversation. Pick a fascinating topic and share your first thoughts."})
+        
         request = GenerationRequest(
             messages=messages,
             max_tokens=self.config.max_tokens,
@@ -442,28 +445,102 @@ class BaseAgent(ABC):
     
     async def _decide_next_action(self, evaluation, understanding, plan):
         """Decide what to do next based on evaluation."""
-        if not evaluation.get("useful", False):
-            return await self._generate_fallback_response(
-                f"Previous action not useful: {evaluation.get('lesson', 'unknown')}"
-            )
-        
-        if understanding["open_questions"] and plan["priority"] == "high":
-            return await self._generate_fallback_response(
-                f"Addressing open questions: {understanding['open_questions'][0][:100]}"
-            )
-        
-        return await self._generate_continuation_response(understanding, plan)
+        context = AgentContext(
+            conversation_id="",
+            turn_number=self._current_turn,
+            recent_messages=[],
+            memory_summary=understanding.get("memory_summary", ""),
+            available_tools=understanding.get("available_tools", [])
+        )
+        result = await self._execute_generation(context)
+        return result.get("result", {}).get("text", "Continuing.")
     
     async def _generate_fallback_response(self, reason: str) -> str:
         """Generate a fallback response when action not useful."""
         return f"I need to reconsider my approach. {reason}"
+
+    async def _think_with_tools(self, context: AgentContext) -> str:
+        """Think with tool-calling capability."""
+        response = await self.generate_response(context)
+        
+        import re, json
+        tool_pattern = r'\[TOOL:(\w+):(\{.*?\})\]'
+        matches = re.findall(tool_pattern, response)
+        
+        if not matches:
+            return response
+        
+        tool_results = []
+        for tool_name, args_json in matches:
+            try:
+                args = json.loads(args_json)
+                result = await self._run_tool(tool_name, args)
+                tool_results.append(f"[{tool_name} result: {result}]")
+            except Exception as e:
+                tool_results.append(f"[{tool_name} error: {e}]")
+        
+        if tool_results:
+            tool_context = "\n".join(tool_results)
+            followup = await self._generate_with_tool_results(context, tool_context)
+            return response + "\n\n" + followup
+        
+        return response
     
-    async def _generate_continuation_response(self, understanding, plan):
-        """Generate a continuation response."""
-        if understanding["key_themes"]:
-            theme = understanding["key_themes"][0]
-            return f"Building on the current theme: {theme}"
-        return "Continuing with current task"
+    async def _run_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Execute a tool via the event bus."""
+        from app.events.schemas import ToolCall, ToolResult
+        call = ToolCall(
+            tool_name=tool_name,
+            arguments=arguments,
+            agent_id=self.agent_id
+        )
+        
+        future = asyncio.get_event_loop().create_future()
+        
+        def handler(event):
+            if event.payload.get("call_id") == call.call_id:
+                if event.type in (EventType.TOOL_COMPLETED, EventType.TOOL_FAILED):
+                    future.set_result(ToolResult(
+                        call_id=call.call_id,
+                        tool_name=tool_name,
+                        success=event.type == EventType.TOOL_COMPLETED,
+                        result=event.payload.get("result"),
+                        error=event.payload.get("error")
+                    ))
+        
+        self.event_bus.subscribe(EventType.TOOL_COMPLETED, handler)
+        self.event_bus.subscribe(EventType.TOOL_FAILED, handler)
+        
+        await self.event_bus.publish_type(
+            EventType.TOOL_REQUEST,
+            context.conversation_id,
+            {"call_id": call.call_id, "tool_name": tool_name, "arguments": arguments, "agent_id": self.agent_id}
+        )
+        
+        try:
+            result = await asyncio.wait_for(future, timeout=30)
+            return str(result.result)[:500] if result.success else f"Error: {result.error}"
+        except asyncio.TimeoutError:
+            return "Tool execution timed out"
+        finally:
+            self.event_bus.unsubscribe(EventType.TOOL_COMPLETED, handler)
+            self.event_bus.unsubscribe(EventType.TOOL_FAILED, handler)
+    
+    async def _generate_with_tool_results(self, context: AgentContext, tool_results: str) -> str:
+        """Generate follow-up with tool results."""
+        messages = []
+        if self.config.system_prompt:
+            messages.append({"role": "system", "content": self.config.system_prompt})
+        for msg in context.recent_messages:
+            role = "assistant" if msg.agent_id == self.agent_id else "user"
+            messages.append({"role": role, "content": f"[{msg.agent_identity}] {msg.content}"})
+        messages.append({"role": "user", "content": f"Tool results:\n{tool_results}\n\nContinue based on these results."})
+        
+        request = GenerationRequest(messages=messages, max_tokens=self.config.max_tokens, temperature=self.config.temperature, stream=True)
+        full_response = ""
+        async for chunk in self.model.generate_stream(request):
+            full_response += chunk
+        return full_response.strip()
 
 
 class ExplorerAgent(BaseAgent):
@@ -471,8 +548,7 @@ class ExplorerAgent(BaseAgent):
         super().__init__(agent_id, config, event_bus, model_adapter)
     
     async def think(self, context: AgentContext) -> str:
-        # Explorer decision loop: explore ideas, investigate possibilities
-        return await self._decision_loop(context)
+        return await self._think_with_tools(context)
 
 
 class ChallengerAgent(BaseAgent):
@@ -480,8 +556,7 @@ class ChallengerAgent(BaseAgent):
         super().__init__(agent_id, config, event_bus, model_adapter)
     
     async def think(self, context: AgentContext) -> str:
-        # Challenger decision loop: analytical reasoning and challenge
-        return await self._decision_loop(context)
+        return await self._think_with_tools(context)
 
 
 class ObserverAgent(BaseAgent):

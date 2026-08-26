@@ -255,7 +255,8 @@ class ConversationEngine:
         
         self.state_machine.transition(SMState.OBSERVING)
         
-        await self._maybe_trigger_observer()
+        # Observer disabled — only Atlas and Argus talk
+        # await self._maybe_trigger_observer()
         
         # Summarization is now handled by ContextManager internally within update_from_message
         

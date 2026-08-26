@@ -21,7 +21,7 @@ from app.orchestration.conversation import ConversationEngine, ConversationConfi
 from app.orchestration.scheduler import create_scheduler
 from app.audio import TTSConfig, STTConfig, create_tts_adapter, create_stt_adapter
 from app.memory import SQLiteStore, MemorySummarizer, MemoryManager, ContextManager
-from app.tools import ToolGateway, TerminalTool, FilesystemTool, WebTool
+from app.tools import ToolGateway, TerminalTool, FilesystemTool, WebTool, set_tool_gateway
 from app.permissions import PermissionManager
 from app.resources import ResourceManager, ResourceThresholds, ResourceLevel
 from app.autonomy import AutonomousEnvironment
@@ -39,8 +39,9 @@ logger = setup_logging(
 
 
 class SandboxApp:
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, start_paused: bool = False):
         self.config = self._load_config(config_path)
+        self.start_paused = start_paused
         self.event_bus = EventBus()
         set_event_bus(self.event_bus)
         self.model_registry = get_model_registry()
@@ -202,6 +203,7 @@ class SandboxApp:
         tools_config = self.config.get("tools", {})
         
         self.tool_gateway = ToolGateway(self.event_bus)
+        set_tool_gateway(self.tool_gateway)
         
         if tools_config.get("terminal", {}).get("enabled", True):
             terminal = TerminalTool(
@@ -252,7 +254,6 @@ class SandboxApp:
         agents = {
             "agent_a": agent_a,
             "agent_b": agent_b,
-            "agent_c": agent_c
         }
         
         conv_config = self.config.get("conversation", {})
@@ -274,7 +275,6 @@ class SandboxApp:
             context_manager=self.context_manager
         )
         
-        self.conversation_engine.add_turn_callback(self._on_turn)
         self.conversation_engine.add_interrupt_callback(self._on_interrupt)
         self.conversation_engine.add_turn_callback(self._on_turn_autonomy)
         
@@ -419,19 +419,6 @@ class SandboxApp:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, lambda: asyncio.create_task(self.shutdown()))
         
-        print("\n" + "="*60)
-        print("AI SANDBOX - Autonomous Multi-Agent Conversation")
-        print("="*60)
-        print(f"Conversation ID: {self.conversation_engine.conversation_id}")
-        print(f"Agents: A (Explorer) <-> B (Challenger)")
-        if self._tts:
-            print(f"TTS: Enabled")
-        if self._stt:
-            print(f"STT: Enabled (speak to interrupt)")
-        if self.resource_manager:
-            print(f"Resource Monitoring: Enabled")
-        print(f"Press Ctrl+C to stop\n")
-        
         session_config = SessionConfig(
             session_id=self.conversation_engine.conversation_id,
             max_turns=self.config.get("conversation", {}).get("max_turns", 1000),
@@ -452,6 +439,9 @@ class SandboxApp:
             await self.resource_manager.start()
         
         await self.conversation_engine.start()
+        
+        if self.start_paused:
+            await self.conversation_engine.pause()
         
         await self._shutdown_event.wait()
     

@@ -104,44 +104,55 @@ def interactive(config):
 
 
 async def _interactive_sandbox(config_path: str):
-    app = SandboxApp(config_path)
+    app = SandboxApp(config_path, start_paused=True)
     await app.initialize()
     cli_context.app = app
     
-    console.print(Panel.fit(
-        "[bold cyan]AI SANDBOX - Interactive Mode[/bold cyan]",
-        border_style="cyan"
-    ))
-    console.print(f"[green]Conversation ID:[/green] {app.conversation_engine.conversation_id}")
-    console.print(f"[green]Agents:[/green] Atlas (Explorer) <-> Argus (Challenger) + Observer")
-    console.print()
-    console.print("[bold]Chat:[/bold] Type anything to send a message to the agents")
-    console.print("[bold]Commands:[/bold]")
-    console.print("  [cyan]/help[/cyan]        Show all commands")
-    console.print("  [cyan]/status[/cyan]      System status & metrics")
-    console.print("  [cyan]/pause[/cyan]       Pause conversation")
-    console.print("  [cyan]/resume[/cyan]      Resume conversation")
-    console.print("  [cyan]/inject <msg>[/cyan] Send message to agents")
-    console.print("  [cyan]/tts[/cyan]         Toggle text-to-speech (listen)")
-    console.print("  [cyan]/join[/cyan]        Join conversation (type your input)")
-    console.print("  [cyan]/stop[/cyan]        Stop everything")
-    console.print("[yellow]Press Ctrl+C to exit[/yellow]\n")
-    
     app.conversation_engine.add_turn_callback(_on_turn_display)
     
+    console.print(Panel.fit(
+        "[bold cyan]AI SANDBOX[/bold cyan]",
+        border_style="cyan"
+    ))
+    console.print(f"[dim]Session:[/dim] {app.conversation_engine.conversation_id[:12]}")
+    console.print()
+    console.print("[bold]Agents are standing by.[/bold]")
+    console.print()
+    console.print("  [cyan]/start[/cyan]     Begin autonomous conversation")
+    console.print("  [cyan]/stop[/cyan]      Pause agents")
+    console.print("  [cyan]/status[/cyan]    System status")
+    console.print("  [cyan]/tts[/cyan]       Toggle text-to-speech")
+    console.print("  [cyan]/help[/cyan]      All commands")
+    console.print()
+    console.print("[dim]Type anything to send a message to the agents[/dim]")
+    console.print()
+    
+    async def run_engine():
+        await app.run()
+    
     async def input_loop():
-        while app.conversation_engine.is_running:
+        while True:
             try:
-                user_input = await asyncio.get_event_loop().run_in_executor(None, input, "YOU > ")
-                if user_input.strip():
-                    if user_input.startswith("/"):
-                        await _handle_command(app, user_input.strip())
-                    else:
-                        await app.conversation_engine.inject_human_message(user_input.strip())
+                console.print()
+                console.print("─" * 50, style="dim")
+                user_input = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: input("YOU > ")
+                )
+                if not user_input.strip():
+                    continue
+                
+                text = user_input.strip()
+                
+                if text.startswith("/"):
+                    await _handle_command(app, text)
+                else:
+                    await app.conversation_engine.inject_human_message(text)
+                    console.print("[green]  >> Sent[/green]")
+                    
             except (EOFError, KeyboardInterrupt):
                 break
     
-    await asyncio.gather(app.run(), input_loop())
+    await asyncio.gather(run_engine(), input_loop())
 
 
 def _on_turn_display(message):
@@ -172,17 +183,20 @@ async def _handle_command(app: SandboxApp, command: str):
     
     if cmd in ("/help", "/h"):
         _show_help()
-    elif cmd in ("/status", "/st"):
-        await _show_status(app)
+    elif cmd in ("/start", "/go"):
+        await app.conversation_engine.resume()
+        console.print("[green]Agents started[/green]")
+    elif cmd in ("/stop", "/s"):
+        await app.conversation_engine.pause()
+        console.print("[yellow]Agents paused[/yellow]")
     elif cmd in ("/pause", "/pa"):
         await app.conversation_engine.pause()
         console.print("[yellow]Paused[/yellow]")
     elif cmd in ("/resume", "/re"):
         await app.conversation_engine.resume()
         console.print("[green]Resumed[/green]")
-    elif cmd in ("/stop", "/s"):
-        await app.shutdown()
-        console.print("[red]Stopped[/red]")
+    elif cmd in ("/status", "/st"):
+        await _show_status(app)
     elif cmd in ("/sessions", "/ss"):
         await _show_sessions(app)
     elif cmd in ("/session", "/se"):
@@ -245,38 +259,29 @@ def _show_help():
     help_text = """
 [bold]Available Commands:[/bold]
 
-[bold]Chat & Interaction:[/bold]
-  <text>               Type anything to send a message
-  /inject <message>    Send message to agents
-  /join                Join conversation
-  /tts                 Toggle text-to-speech
+[bold]Control:[/bold]
+  /start             Start autonomous conversation
+  /stop              Pause agents
+  /status            System status & metrics
 
-[bold]System Control:[/bold]
-  /help, /h          Show this help
-  /status, /st       Show system status
-  /pause, /pa        Pause the conversation
-  /resume, /re       Resume the conversation
-  /stop, /s          Stop the system
+[bold]Chat:[/bold]
+  <text>             Send message to agents (no prefix needed)
+  /inject <message>  Send message to agents
 
-[bold]Session Management:[/bold]
-  /sessions, /ss     List all sessions
-  /session <id>      Show session details
+[bold]Audio:[/bold]
+  /tts               Toggle text-to-speech
 
-[bold]Inspection:[/bold]
-  /memory, /m        Show memory state
-  /research, /r      Show research
-  /evidence, /e      Show evidence
-  /experiments, /ex  Show experiments
-  /permissions, /perm Show permissions
-  /tools, /t         Show available tools
-  /resources, /res   Show resource usage
-  /logs, /l          Show recent logs
-  /timeline, /tl     Show event timeline
-  /report, /rep      Generate session report
-
-[bold]Permissions:[/bold]
-  /approve <id>      Approve permission request
-  /deny <id>         Deny permission request
+[bold]Other:[/bold]
+  /help              Show this help
+  /pause             Pause (same as /stop)
+  /resume            Resume (same as /start)
+  /sessions          List sessions
+  /memory            Show memory
+  /evidence          Show evidence
+  /tools             Show tools
+  /resources         Show resource usage
+  /logs              Show logs
+  /report            Generate report
 """
     console.print(Panel(help_text, title="Help", border_style="blue"))
 
