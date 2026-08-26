@@ -16,6 +16,14 @@
 - Autonomous Environment: Proposal-driven exploration sessions
 - A2A Protocol: Agent cards, task requests, peer discovery
 
+### Database Acceptance Criteria
+- Database backup using SQLite Online Backup API (consistent snapshots while running)
+- Database restore with automatic pre-restore backup
+- Database health inspection (integrity check, WAL mode, table counts, row counts)
+- Resource metrics persistence to SQLite (resource_metrics table now populated)
+- WAL mode enabled by default for concurrent access
+- .gitignore excludes runtime databases, logs, and secrets from Git
+
 ### Evidence Plane Addon
 - Evidence Manager: Centralized event-to-evidence recording
 - Session Manager: Lifecycle, recovery, metadata persistence

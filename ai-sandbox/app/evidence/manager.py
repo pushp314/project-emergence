@@ -45,6 +45,7 @@ class EvidenceManager:
     
     def _init_db(self) -> None:
         with self._get_conn() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS evidence (
                     evidence_id TEXT PRIMARY KEY,
@@ -285,10 +286,10 @@ class EvidenceManager:
             EventType.SYSTEM_STOP,
             EventType.HUMAN_INTERRUPT,
             EventType.HUMAN_MESSAGE,
-            EventType.emergence_observed,
-            EventType.agent_self_assessment,
-            EventType.agent_role_change,
-            EventType.agent_disagreement,
+            EventType.EMERGENCE_OBSERVED,
+            EventType.AGENT_SELF_ASSESSMENT,
+            EventType.AGENT_ROLE_CHANGE,
+            EventType.AGENT_DISAGREEMENT,
         ]
         
         for event_type in event_types:
@@ -353,10 +354,10 @@ class EvidenceManager:
             EventType.SYSTEM_PAUSE: self._handle_system_pause,
             EventType.SYSTEM_RESUME: self._handle_system_resume,
             EventType.SYSTEM_STOP: self._handle_system_stop,
-            EventType.emergence_observed: self._handle_emergence_observed,
-            EventType.agent_self_assessment: self._handle_self_assessment,
-            EventType.agent_role_change: self._handle_role_change,
-            EventType.agent_disagreement: self._handle_disagreement,
+            EventType.EMERGENCE_OBSERVED: self._handle_emergence_observed,
+            EventType.AGENT_SELF_ASSESSMENT: self._handle_self_assessment,
+            EventType.AGENT_ROLE_CHANGE: self._handle_role_change,
+            EventType.AGENT_DISAGREEMENT: self._handle_disagreement,
         }
         
         handler = handlers.get(event.type)
@@ -600,7 +601,7 @@ class EvidenceManager:
     async def _handle_emergence_observed(self, event: Event) -> None:
         evidence = self._create_evidence(
             event,
-            EvidenceType.emergence_observed,
+            EvidenceType.EMERGENCE_OBSERVED,
             intent="Emergence observed",
             reason=f"Emergent behavior detected: {event.payload.get('behavior_type', 'unknown')}",
             action_details=event.payload,
@@ -611,7 +612,7 @@ class EvidenceManager:
     async def _handle_self_assessment(self, event: Event) -> None:
         evidence = self._create_evidence(
             event,
-            EvidenceType.agent_self_assessment,
+            EvidenceType.AGENT_SELF_ASSESSMENT,
             intent="Agent self-assessment",
             reason=event.payload.get("assessment", ""),
             action_details=event.payload,
@@ -622,7 +623,7 @@ class EvidenceManager:
     async def _handle_role_change(self, event: Event) -> None:
         evidence = self._create_evidence(
             event,
-            EvidenceType.agent_role_change,
+            EvidenceType.AGENT_ROLE_CHANGE,
             intent="Agent role change",
             reason=f"Role changed to {event.payload.get('new_role', 'unknown')}",
             action_details=event.payload,
@@ -633,7 +634,7 @@ class EvidenceManager:
     async def _handle_disagreement(self, event: Event) -> None:
         evidence = self._create_evidence(
             event,
-            EvidenceType.agent_disagreement,
+            EvidenceType.AGENT_DISAGREEMENT,
             intent="Agent disagreement",
             reason=f"Disagreement on {event.payload.get('topic', 'unknown')}",
             action_details=event.payload,
@@ -881,6 +882,141 @@ class EvidenceManager:
         with self._get_conn() as conn:
             row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (sid,)).fetchone()
             return dict(row) if row else None
+
+    def backup(self, backup_dir: str = "./data/backups") -> Optional[str]:
+        """Create a SQLite-safe backup of the database.
+        
+        Uses the SQLite Online Backup API to ensure consistency even while
+        the database is being written to. Returns the backup path on success,
+        None on failure.
+        """
+        backup_path_obj = Path(backup_dir)
+        backup_path_obj.mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+        backup_file = backup_path_obj / f"sandbox_{timestamp}.db"
+        
+        try:
+            source_conn = sqlite3.connect(str(self.db_path))
+            dest_conn = sqlite3.connect(str(backup_file))
+            
+            source_conn.backup(dest_conn)
+            
+            dest_conn.close()
+            source_conn.close()
+            
+            backup_size = backup_file.stat().st_size
+            logger.info(f"Database backup created: {backup_file} ({backup_size} bytes)")
+            return str(backup_file)
+            
+        except Exception as e:
+            logger.error(f"Database backup failed: {e}")
+            if backup_file.exists():
+                backup_file.unlink()
+            return None
+
+    def restore(self, backup_path: str) -> bool:
+        """Restore the database from a backup file.
+        
+        Creates a backup of the current database before restoring.
+        Returns True on success, False on failure.
+        """
+        backup_source = Path(backup_path)
+        if not backup_source.exists():
+            logger.error(f"Backup file not found: {backup_path}")
+            return False
+        
+        pre_restore_backup = self.backup()
+        if pre_restore_backup:
+            logger.info(f"Pre-restore backup saved: {pre_restore_backup}")
+        
+        try:
+            source_conn = sqlite3.connect(str(backup_source))
+            dest_conn = sqlite3.connect(str(self.db_path))
+            
+            source_conn.backup(dest_conn)
+            
+            dest_conn.close()
+            source_conn.close()
+            
+            logger.info(f"Database restored from: {backup_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Database restore failed: {e}")
+            return False
+
+    def get_db_health(self) -> Dict[str, Any]:
+        """Return database health metrics for CLI inspection."""
+        health: Dict[str, Any] = {
+            "db_path": str(self.db_path),
+            "exists": self.db_path.exists(),
+            "healthy": False,
+        }
+        
+        if not self.db_path.exists():
+            health["error"] = "Database file does not exist"
+            return health
+        
+        health["size_bytes"] = self.db_path.stat().st_size
+        health["size_mb"] = round(self.db_path.stat().st_size / (1024 * 1024), 2)
+        
+        try:
+            with self._get_conn() as conn:
+                tables = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                ).fetchall()
+                health["tables"] = [row["name"] for row in tables]
+                health["table_count"] = len(health["tables"])
+                
+                row_counts: Dict[str, int] = {}
+                for table in tables:
+                    name = table["name"]
+                    if name == "schema_migrations":
+                        continue
+                    count = conn.execute(f"SELECT COUNT(*) as cnt FROM [{name}]").fetchone()["cnt"]
+                    row_counts[name] = count
+                health["row_counts"] = row_counts
+                
+                health["wal_mode"] = conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+                
+                integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+                health["integrity"] = integrity
+                health["healthy"] = integrity == "ok"
+                
+                try:
+                    applied = conn.execute(
+                        "SELECT version FROM schema_migrations ORDER BY version"
+                    ).fetchall()
+                    health["schema_version"] = max((r["version"] for r in applied), default=0)
+                    health["applied_migrations"] = [r["version"] for r in applied]
+                except Exception:
+                    health["schema_version"] = 0
+                    health["applied_migrations"] = []
+                
+        except Exception as e:
+            health["error"] = str(e)
+            health["healthy"] = False
+        
+        return health
+
+    def list_backups(self, backup_dir: str = "./data/backups") -> List[Dict[str, Any]]:
+        """List available backups with metadata."""
+        backup_path = Path(backup_dir)
+        if not backup_path.exists():
+            return []
+        
+        backups: List[Dict[str, Any]] = []
+        for f in sorted(backup_path.glob("sandbox_*.db")):
+            backups.append({
+                "path": str(f),
+                "filename": f.name,
+                "size_bytes": f.stat().st_size,
+                "size_mb": round(f.stat().st_size / (1024 * 1024), 2),
+                "created": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+            })
+        
+        return backups
 
 
 _evidence_manager: Optional[EvidenceManager] = None

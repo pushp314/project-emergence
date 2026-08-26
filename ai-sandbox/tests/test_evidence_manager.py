@@ -28,7 +28,7 @@ async def test_intent_action_stage_recording(evidence_manager):
 async def test_emergence_event_recording(evidence_manager, event_bus):
     # Emit an emergence event
     event = Event(
-        type=EventType.emergence_observed,
+        type=EventType.EMERGENCE_OBSERVED,
         conversation_id="conv-123",
         payload={
             "agent_id": "atlas",
@@ -42,17 +42,17 @@ async def test_emergence_event_recording(evidence_manager, event_bus):
     
     # Verify it was saved
     with sqlite3.connect(evidence_manager.db_path) as conn:
-        cursor = conn.execute("SELECT evidence_type, reason FROM evidence WHERE evidence_type = ?", (EvidenceType.emergence_observed.value,))
+        cursor = conn.execute("SELECT evidence_type, reason FROM evidence WHERE evidence_type = ?", (EvidenceType.EMERGENCE_OBSERVED.value,))
         row = cursor.fetchone()
         
         assert row is not None
-        assert row[0] == EvidenceType.emergence_observed.value
+        assert row[0] == EvidenceType.EMERGENCE_OBSERVED.value
         assert "tool_creation" in row[1]
 
 @pytest.mark.asyncio
 async def test_self_assessment_event_recording(evidence_manager, event_bus):
     event = Event(
-        type=EventType.agent_self_assessment,
+        type=EventType.AGENT_SELF_ASSESSMENT,
         conversation_id="conv-123",
         payload={
             "agent_id": "argus",
@@ -63,9 +63,9 @@ async def test_self_assessment_event_recording(evidence_manager, event_bus):
     await evidence_manager._handle_event(event)
     
     with sqlite3.connect(evidence_manager.db_path) as conn:
-        cursor = conn.execute("SELECT evidence_type, reason FROM evidence WHERE evidence_type = ?", (EvidenceType.agent_self_assessment.value,))
+        cursor = conn.execute("SELECT evidence_type, reason FROM evidence WHERE evidence_type = ?", (EvidenceType.AGENT_SELF_ASSESSMENT.value,))
         row = cursor.fetchone()
         
         assert row is not None
-        assert row[0] == EvidenceType.agent_self_assessment.value
+        assert row[0] == EvidenceType.AGENT_SELF_ASSESSMENT.value
         assert row[1] == "My challenge was not effective"

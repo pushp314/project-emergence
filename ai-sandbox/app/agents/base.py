@@ -406,7 +406,7 @@ class BaseAgent(ABC):
         """Record what happened (observation)."""
         if result.get("success") and selection:
             await self.event_bus.publish_type(
-                EventType.emergence_observed,
+                EventType.EMERGENCE_OBSERVED,
                 context.conversation_id,
                 {
                     "behavior": selection["capability"],

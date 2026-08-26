@@ -35,10 +35,10 @@ class EventType(str, Enum):
     
     OBSERVER_INTERVENTION = "observer.intervention"
     
-    emergence_observed = "emergence.observed"
-    agent_self_assessment = "agent.self_assessment"
-    agent_role_change = "agent.role_change"
-    agent_disagreement = "agent.disagreement"
+    EMERGENCE_OBSERVED = "emergence.observed"
+    AGENT_SELF_ASSESSMENT = "agent.self_assessment"
+    AGENT_ROLE_CHANGE = "agent.role_change"
+    AGENT_DISAGREEMENT = "agent.disagreement"
     
     RESOURCE_WARNING = "resource.warning"
     RESOURCE_CRITICAL = "resource.critical"

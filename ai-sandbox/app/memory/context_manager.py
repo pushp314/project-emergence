@@ -6,6 +6,7 @@ import logging
 import uuid
 from datetime import datetime
 
+from app.memory.store import SQLiteStore, ConversationRecord
 from app.events.bus import get_event_bus
 
 logger = logging.getLogger(__name__)
@@ -113,16 +114,16 @@ class ContextManager:
             )
 
         # Record the message
-        await self.store.save_message({
-            "id": str(uuid.uuid4()),
-            "conversation_id": self.state.conversation_id,
-            "turn_number": current_turn,
-            "agent_id": getattr(message, "agent_id", ""),
-            "role": getattr(message, "agent_identity", "unknown"),
-            "content": getattr(message, "content", ""),
-            "timestamp": getattr(message, "timestamp", datetime.utcnow().isoformat()),
-            "metadata": getattr(message, "metadata", {}),
-        })
+        self.store.save_message(ConversationRecord(
+            id=str(uuid.uuid4()),
+            conversation_id=self.state.conversation_id,
+            turn_number=current_turn,
+            agent_id=getattr(message, "agent_id", ""),
+            role=getattr(message, "agent_identity", "unknown"),
+            content=getattr(message, "content", ""),
+            timestamp=getattr(message, "timestamp", datetime.utcnow().isoformat()),
+            metadata=getattr(message, "metadata", {}),
+        ))
 
         # Update state
         self.state.total_turns = current_turn
@@ -137,7 +138,7 @@ class ContextManager:
             self.state.evidence_counts[etype] = self.state.evidence_counts.get(etype, 0) + 1
 
         # Extract context using summarizer
-        context = await self.summarizer.build_context(
+        context = self.summarizer.build_context(
             self.state.conversation_id,
             current_turn,
             short_term_turns=self.summarization_interval
@@ -155,9 +156,9 @@ class ContextManager:
         recent_messages = []
         for msg in context.get("recent_messages", []):
             recent_messages.append({
-                "role": msg.get("role", "unknown"),
-                "content": msg.get("content", "")[:200],
-                "turn_number": msg.get("turn_number", 0),
+                "role": getattr(msg, "role", "unknown"),
+                "content": getattr(msg, "content", "")[:200],
+                "turn_number": getattr(msg, "turn_number", 0),
             })
 
         snapshot = ContextSnapshot(
@@ -167,7 +168,7 @@ class ContextManager:
             summary=context.get("summary", ""),
             important_facts=[f.content for f in important_facts],
             open_questions=[q.content for q in open_questions],
-            current_topic=context.get("latest_summary", {}).get("topic", ""),
+            current_topic=context.get("latest_summary").topic if context.get("latest_summary") else "",
             role_distribution=self.state.role_distribution,
             evidence_summary=self.state.evidence_counts,
             resource_state="GREEN",
@@ -246,9 +247,9 @@ class ContextManager:
 
         context_parts.append(f"\nRecent turns (last {min(self.summarization_interval, self.state.total_turns)} turns):")
         for msg in recent_messages:
-            role = msg.get("agent_identity", "unknown")
-            content = msg.get("content", "")[:500]
-            context_parts.append(f"[{role}] Turn {msg.get('turn_number', 0)}: {content}")
+            role = getattr(msg, "role", "unknown")
+            content = getattr(msg, "content", "")[:500]
+            context_parts.append(f"[{role}] Turn {getattr(msg, 'turn_number', 0)}: {content}")
 
         if important_facts:
             context_parts.append(f"\nImportant facts ({len(important_facts)}):")

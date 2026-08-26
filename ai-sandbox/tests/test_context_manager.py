@@ -8,14 +8,14 @@ from app.events.bus import EventBus
 @pytest_asyncio.fixture
 async def context_manager():
     store = Mock()
-    store.save_message = AsyncMock()
+    store.save_message = Mock()
     store.get_messages = Mock(return_value=[])
     store.get_latest_summary = Mock(return_value=None)
     store.get_all_summaries = Mock(return_value=[])
     store.get_memory = Mock(return_value=[])
     
     summarizer = Mock()
-    summarizer.build_context = AsyncMock(return_value={"recent_messages": [], "summary": "Test Summary"})
+    summarizer.build_context = Mock(return_value={"recent_messages": [], "summary": "Test Summary"})
     
     summary_mock = Mock()
     summary_mock.id = "1"

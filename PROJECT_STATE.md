@@ -1,14 +1,15 @@
 # Project State
 
 ## Current Phase
-Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete) + Documentation Synchronization (Complete)
+Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete) + Documentation Synchronization (Complete) + Database Acceptance Criteria (Complete)
 
 ## Current Status
 ✅ All 9 phases of core implementation complete
 ✅ All mandatory addons implemented
 ✅ Documentation synchronized with autonomous agent design principles
 ✅ Code fully aligned with autonomous architecture
-✅ Comprehensive test suite with 100% passing tests
+✅ Comprehensive test suite with 52 passing tests
+✅ SQLite acceptance criteria met (backup, restore, health inspection, WAL mode)
 
 ## Completed
 [COMPLETE] Event Bus with structured event schemas
@@ -48,7 +49,10 @@ Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete) + Documentat
 [COMPLETE] Session creation, tracking, and completion
 [COMPLETE] Evidence recording for all event types
 [COMPLETE] Permission gating for tools
-[COMPLETE] Pytest suite covering all major components (39 passing tests)
+[COMPLETE] Pytest suite covering all major components (52 passing tests)
+[COMPLETE] Database backup/restore with SQLite Online Backup API
+[COMPLETE] Database health inspection (integrity, WAL mode, row counts, tables)
+[COMPLETE] Resource metrics persistence to SQLite
 
 ## In Progress
 [IN PROGRESS] Performance benchmarking and optimization
@@ -90,7 +94,10 @@ None currently
 - Comprehensive Pytest suite covering core modules
 - ContextManager integration tests
 - EvidenceManager schema validations
-- 100% pass rate achieved across 39 tests
+- Database backup/restore tests
+- Database health inspection tests
+- Resource metrics persistence tests
+- 52 tests passing across 5 test files
 
 ## Performance
 - Sequential inference maintains <1GB RAM per agent
@@ -110,6 +117,8 @@ None currently
 
 ## Files Added
 - tests/test_context_manager.py
+- tests/test_db_backup_health.py
+- tests/conftest.py
 - app/evidence/ (schemas.py, manager.py, __init__.py)
 - app/sessions/ (manager.py, __init__.py)
 - app/research/ (manager.py, __init__.py)
@@ -120,18 +129,26 @@ None currently
 - app/capabilities/ (registry.py, __init__.py)
 - app/cli/ (main.py, __init__.py)
 - app/__main__.py
+- .gitignore
 
 ## Files Modified
+- app/events/bus.py (fixed EventType enum naming, added EMERGENCE_OBSERVED, AGENT_SELF_ASSESSMENT, AGENT_ROLE_CHANGE, AGENT_DISAGREEMENT)
+- app/events/schemas.py (removed AgentRole, added intent, fixed EvidenceType naming)
+- app/evidence/manager.py (added backup/restore, health inspection, WAL mode, resource metrics persistence)
+- app/evidence/schemas.py (fixed EvidenceType enum naming)
+- app/agents/base.py (fixed EventType reference, updated to EMERGENCE_OBSERVED)
 - app/memory/context_manager.py (created/integrated)
 - tests/test_core.py (updated assertions and removed AgentRole)
-- app/events/schemas.py (removed AgentRole, added intent)
-- app/agents/base.py (refined autonomous decision loop)
+- tests/test_evidence_manager.py (updated EventType references)
 - config.yaml (added all addon configurations)
 - requirements.txt (added click, rich)
 
 ## Last Agent Action
-Implemented `ContextManager`, wrote integration tests in `tests/test_context_manager.py`, verified robust test suite execution (39 passing tests), and removed stale IDE virtual parser errors by setting up correct venv dependencies.
+Fixed EventType enum naming convention (lowercase → SCREAMING_SNAKE_CASE), implemented database backup/restore via SQLite Online Backup API, added database health inspection (integrity, WAL mode, row counts), enabled WAL mode by default, added .gitignore for runtime data exclusion, added comprehensive test suite for database operations (13 new tests, 52 total passing).
 
 ## Next Agent Instruction
-1. Review remaining Medium/Low priority tasks (e.g. Master Control Plane).
-2. Continue iterative development on Browser research tools if requested.
+1. Implement Master Control Plane (auth, command bus, intervention, emergency) - listed as Next Task
+2. Implement browser session management with DOM/accessibility extraction
+3. Add performance benchmarks
+4. Add CLI /db commands for database inspection (backup, health, sessions, events, etc.)
+5. Continue iterative development on any remaining MEDIUM/LOW priority items

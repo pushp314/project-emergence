@@ -49,7 +49,7 @@ None
 - **Reproduction:** Check resource_metrics table after running
 - **Likely Cause:** ResourceManager doesn't call evidence_manager.record_resource_metrics
 - **Proposed Fix:** Add periodic metric recording to ResourceManager
-- **Status:** Open
+- **Status:** FIXED - ResourceManager now calls evidence_manager.record_resource_metrics during monitoring loop
 
 ### Issue: Observer Agent Not Triggering Interventions
 - **Observed:** Observer agent never speaks despite configured to intervene
@@ -88,7 +88,7 @@ None
 - **Observed:** Only manual CLI testing performed
 - **Severity:** DESIGN DEBT
 - **Proposed Fix:** Add pytest suite for all components
-- **Status:** Planned
+- **Status:** PARTIALLY RESOLVED - 52 tests across 5 files covering core, context manager, evidence manager, migrations, and database backup/health
 
 ### Issue: Hardcoded Model Capabilities
 - **Observed:** DEFAULT_MODEL_CAPABILITIES defined in registry.py
