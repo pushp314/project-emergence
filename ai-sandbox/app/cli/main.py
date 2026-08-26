@@ -69,26 +69,7 @@ def start(config):
 
 
 async def _start_sandbox(config_path: str):
-    app = SandboxApp(config_path)
-    await app.initialize()
-    cli_context.app = app
-    
-    console.print(Panel.fit(
-        "[bold cyan]AI SANDBOX - Autonomous Multi-Agent Conversation[/bold cyan]",
-        border_style="cyan"
-    ))
-    
-    console.print(f"[green]Conversation ID:[/green] {app.conversation_engine.conversation_id}")
-    console.print(f"[green]Agents:[/green] A (Explorer) <-> B (Challenger)")
-    if app.resource_manager:
-        console.print(f"[green]Resource Monitoring:[/green] Enabled")
-    console.print("[yellow]Press Ctrl+C to stop[/yellow]\n")
-    
-    try:
-        await app.run()
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Shutdown requested...[/yellow]")
-        await app.shutdown()
+    await _interactive_sandbox(config_path)
 
 
 @cli.command()
@@ -131,8 +112,20 @@ async def _interactive_sandbox(config_path: str):
         "[bold cyan]AI SANDBOX - Interactive Mode[/bold cyan]",
         border_style="cyan"
     ))
-    console.print("[green]Commands:[/green] /help, /status, /pause, /resume, /stop, /sessions, /memory, /research, /evidence, /experiments, /permissions, /approve, /deny, /resources, /report, /inject")
-    console.print("[yellow]Type your message or command. Ctrl+C to exit.[/yellow]\n")
+    console.print(f"[green]Conversation ID:[/green] {app.conversation_engine.conversation_id}")
+    console.print(f"[green]Agents:[/green] Atlas (Explorer) <-> Argus (Challenger) + Observer")
+    console.print()
+    console.print("[bold]Chat:[/bold] Type anything to send a message to the agents")
+    console.print("[bold]Commands:[/bold]")
+    console.print("  [cyan]/help[/cyan]        Show all commands")
+    console.print("  [cyan]/status[/cyan]      System status & metrics")
+    console.print("  [cyan]/pause[/cyan]       Pause conversation")
+    console.print("  [cyan]/resume[/cyan]      Resume conversation")
+    console.print("  [cyan]/inject <msg>[/cyan] Send message to agents")
+    console.print("  [cyan]/tts[/cyan]         Toggle text-to-speech (listen)")
+    console.print("  [cyan]/join[/cyan]        Join conversation (type your input)")
+    console.print("  [cyan]/stop[/cyan]        Stop everything")
+    console.print("[yellow]Press Ctrl+C to exit[/yellow]\n")
     
     app.conversation_engine.add_turn_callback(_on_turn_display)
     
@@ -152,18 +145,24 @@ async def _interactive_sandbox(config_path: str):
 
 
 def _on_turn_display(message):
-    identity_colors = {
-        "atlas": "cyan",
-        "argus": "magenta",
-        "explorer": "cyan",
-        "challenger": "magenta",
-        "observer": "yellow",
-        "human": "green"
+    identity_styles = {
+        "atlas": {"color": "cyan", "icon": "🧭"},
+        "argus": {"color": "magenta", "icon": "🔍"},
+        "explorer": {"color": "cyan", "icon": "🧭"},
+        "challenger": {"color": "magenta", "icon": "🔍"},
+        "observer": {"color": "yellow", "icon": "👁"},
+        "human": {"color": "green", "icon": "👤"}
     }
-    color = identity_colors.get(message.agent_identity, "white")
-    console.print(f"[bold {color}][{message.agent_identity.upper()}][/bold {color}] Turn {message.turn_number}")
-    console.print(message.content)
-    console.print()
+    style = identity_styles.get(message.agent_identity, {"color": "white", "icon": "•"})
+    name = message.agent_identity.upper()
+    
+    panel = Panel(
+        message.content,
+        title=f"[bold {style['color']}]{style['icon']} {name}[/bold {style['color']}]  Turn {message.turn_number}",
+        border_style=style["color"],
+        padding=(0, 1)
+    )
+    console.print(panel)
 
 
 async def _handle_command(app: SandboxApp, command: str):
@@ -222,13 +221,35 @@ async def _handle_command(app: SandboxApp, command: str):
             await app.conversation_engine.inject_human_message(message)
         else:
             console.print("[red]Usage: /inject <message>[/red]")
+    elif cmd in ("/tts",):
+        _toggle_tts(app)
+    elif cmd in ("/join",):
+        console.print("[green]You are now in the conversation. Type your message:[/green]")
     else:
         console.print(f"[red]Unknown command: {cmd}[/red]")
+
+
+def _toggle_tts(app: SandboxApp):
+    if not app._tts:
+        console.print("[yellow]TTS not available. Enable in config.yaml: audio.tts_enabled: true[/yellow]")
+        console.print("[dim]Requires: pip install TTS[/dim]")
+        return
+    if app._tts.is_speaking():
+        asyncio.create_task(app._tts.stop())
+        console.print("[yellow]TTS stopped[/yellow]")
+    else:
+        console.print("[green]TTS enabled - agents will be spoken aloud[/green]")
 
 
 def _show_help():
     help_text = """
 [bold]Available Commands:[/bold]
+
+[bold]Chat & Interaction:[/bold]
+  <text>               Type anything to send a message
+  /inject <message>    Send message to agents
+  /join                Join conversation
+  /tts                 Toggle text-to-speech
 
 [bold]System Control:[/bold]
   /help, /h          Show this help
@@ -256,14 +277,6 @@ def _show_help():
 [bold]Permissions:[/bold]
   /approve <id>      Approve permission request
   /deny <id>         Deny permission request
-
-[bold]Modifications:[/bold]
-  /modifications     Show self-modifications
-  /rollback <id>     Rollback modification
-
-[bold]Interaction:[/bold]
-  /inject <message>  Send message to agents
-  <text>             Send message to agents (no prefix)
 """
     console.print(Panel(help_text, title="Help", border_style="blue"))
 

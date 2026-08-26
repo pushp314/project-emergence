@@ -118,7 +118,7 @@ permissions:
   timeout_seconds: 30
 
 audio:
-  tts_enabled: false
+  tts_enabled: true
   stt_enabled: false
   tts_model: "tts_models/en/ljspeech/tacotron2-DDC"
   stt_model: "base"
