@@ -103,13 +103,67 @@ class ObserverAgent(BaseAgent):
             if should_intervene and intervention_content:
                 await self._emit_intervention(intervention_reason, intervention_content, context.conversation_id, context.turn_number)
             
-            self._last_analyzed_turn = context.turn_number
-            
         except json.JSONDecodeError:
-            logger.warning("Observer analysis: failed to parse JSON")
+            logger.warning("Observer analysis: failed to parse JSON, using fallback analysis")
+            # Fallback: simple heuristic analysis
+            await self._fallback_analysis(context)
         except Exception as e:
             logger.error(f"Observer analysis error: {e}")
+        finally:
+            # Always update last analyzed turn to prevent repeated analysis attempts
+            self._last_analyzed_turn = context.turn_number
     
+    async def _fallback_analysis(self, context: AgentContext) -> None:
+        """Fallback analysis when JSON parsing fails."""
+        # Simple heuristic analysis based on message content
+        recent_messages = context.recent_messages[-6:] if context.recent_messages else []
+        
+        # Check for repetition (similar content)
+        contents = [m.content.lower() for m in recent_messages]
+        repetition_score = 0.0
+        if len(contents) >= 2:
+            # Simple similarity check
+            for i in range(len(contents) - 1):
+                if contents[i] == contents[i + 1]:
+                    repetition_score += 0.3
+        
+        # Check for contradictions (simple keyword detection)
+        contradictions = []
+        for msg in recent_messages:
+            content_lower = msg.content.lower()
+            if ("but" in content_lower or "however" in content_lower or 
+                "disagree" in content_lower or "wrong" in content_lower):
+                contradictions.append(msg.content[:100])
+        
+        # Check for questions
+        open_questions = []
+        for msg in recent_messages:
+            if "?" in msg.content:
+                open_questions.append(msg.content[:100])
+        
+        # Update state
+        self.state.repetition_score = min(repetition_score, 1.0)
+        self.state.contradictions = contradictions
+        self.state.open_questions = open_questions
+        self.state.conversation_health = max(0.3, 1.0 - repetition_score)
+        
+        # Determine if intervention needed
+        should_intervene = False
+        intervention_reason = ""
+        
+        if self.state.repetition_score > 0.7:
+            should_intervene = True
+            intervention_reason = f"High repetition detected (score: {self.state.repetition_score:.2f})"
+        elif self.state.conversation_health < 0.3:
+            should_intervene = True
+            intervention_reason = f"Low conversation health (score: {self.state.conversation_health:.2f})"
+        elif self.state.contradictions:
+            should_intervene = True
+            intervention_reason = f"Contradictions detected: {len(self.state.contradictions)}"
+        
+        if should_intervene:
+            await self._emit_intervention(intervention_reason, "", context.conversation_id, context.turn_number)
+
     async def _emit_intervention(self, reason: str, content: str, conversation_id: str, turn_number: int) -> None:
         intervention_text = f"[OBSERVER INTERVENTION: {reason}]\n{content}"
         

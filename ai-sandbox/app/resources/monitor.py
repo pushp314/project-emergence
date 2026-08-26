@@ -60,7 +60,8 @@ class ResourceManager:
     def __init__(
         self,
         event_bus: Optional[EventBus] = None,
-        thresholds: Optional[ResourceThresholds] = None
+        thresholds: Optional[ResourceThresholds] = None,
+        evidence_manager=None
     ):
         self.event_bus = event_bus or get_event_bus()
         self.thresholds = thresholds or ResourceThresholds()
@@ -74,6 +75,7 @@ class ResourceManager:
         }
         self._generation_latencies: List[float] = []
         self._max_latency_samples = 10
+        self._evidence_manager = evidence_manager
     
     def add_callback(self, level: ResourceLevel, callback: Callable[[ResourceState], Awaitable[None]]) -> None:
         self._callbacks[level].append(callback)
@@ -133,6 +135,21 @@ class ResourceManager:
                 generation_latency_ms=avg_latency,
                 active_model=self._state.metrics.active_model if self._state.metrics else ""
             )
+            
+            # Persist metrics to evidence manager
+            if self._evidence_manager:
+                self._evidence_manager.record_resource_metrics({
+                    "ram_used_gb": ram_used_gb,
+                    "ram_total_gb": ram_total_gb,
+                    "cpu_percent": cpu,
+                    "gpu_percent": 0.0,
+                    "inference_latency_ms": avg_latency,
+                    "tokens_per_second": 0.0,
+                    "context_tokens": 0,
+                    "active_agents": 0,
+                    "active_model": self._state.metrics.active_model if self._state.metrics else "",
+                    "queue_depth": 0
+                })
             
             old_level = self._state.level
             new_level = self._evaluate_level(metrics)

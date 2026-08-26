@@ -1,0 +1,2 @@
+{"timestamp": "2026-08-26T02:30:57.794474+00:00", "level": "ERROR", "logger": "app.models.ollama", "message": "Ollama generation failed: Connector is closed.", "module": "ollama", "function": "generate", "line": 96}
+{"timestamp": "2026-08-26T02:30:57.794547+00:00", "level": "ERROR", "logger": "app.agents.observer", "message": "Observer analysis error: Connector is closed.", "module": "observer", "function": "analyze_conversation", "line": 111}

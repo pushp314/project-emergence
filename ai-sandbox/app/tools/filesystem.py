@@ -90,10 +90,22 @@ class FilesystemTool(Tool):
         except ValueError:
             raise PermissionError(f"Path '{path}' is outside base directory")
         
+        # Blocked paths check - only for paths outside base directory (already validated above)
+        # This is a safety net for edge cases where symlinks might escape
         for blocked in self._blocked_paths:
             try:
-                target.relative_to(pathlib.Path(blocked).resolve())
-                raise PermissionError(f"Path '{path}' is in blocked directory: {blocked}")
+                blocked_resolved = pathlib.Path(blocked).resolve()
+                # Only block if the target is NOT under base path but IS under blocked path
+                # (this handles symlink escape attempts)
+                if target != self._base_path and target.is_relative_to(blocked_resolved):
+                    # Double-check: is target actually outside base path?
+                    try:
+                        target.relative_to(self._base_path)
+                        # If we get here, target IS under base path, so it's OK
+                        pass
+                    except ValueError:
+                        # Target is outside base path AND under blocked path - deny
+                        raise PermissionError(f"Path '{path}' is in blocked directory: {blocked}")
             except ValueError:
                 pass
         

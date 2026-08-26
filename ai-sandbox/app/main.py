@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import signal
 import sys
 import uuid
@@ -29,12 +28,14 @@ from app.autonomy import AutonomousEnvironment
 from app.a2a import A2AProtocol, AgentCard, A2AMessageType
 from app.evidence import EvidenceManager, get_evidence_manager
 from app.sessions import SessionManager, SessionConfig
+from app.logging_config import setup_logging, get_structured_logger
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+logger = setup_logging(
+    log_level="INFO",
+    log_dir="./logs",
+    jsonl=True,
+    console=True
 )
-logger = logging.getLogger(__name__)
 
 
 class SandboxApp:
@@ -103,6 +104,12 @@ class SandboxApp:
         summarizer.set_interval(summarization_interval)
         self.memory_manager = MemoryManager(store, summarizer, self.event_bus, max_entries)
         
+        self.evidence_manager = EvidenceManager(
+            db_path="./data/sandbox.db",
+            event_bus=self.event_bus,
+            artifacts_dir="./data/artifacts"
+        )
+        
         permissions_config = self.config.get("permissions", {})
         self.permission_manager = PermissionManager(
             self.event_bus,
@@ -120,7 +127,8 @@ class SandboxApp:
                 cpu_critical_percent=resources_config.get("cpu_critical_percent", 95.0),
                 latency_warning_ms=resources_config.get("generation_latency_warning_ms", 5000.0),
                 check_interval_seconds=resources_config.get("check_interval_seconds", 5.0)
-            )
+            ),
+            self.evidence_manager
         )
         
         self.resource_manager.add_callback(ResourceLevel.WARNING, self._on_resource_warning)
@@ -154,12 +162,6 @@ class SandboxApp:
             )
             self.a2a_protocol.agent_card = self.agent_card
             logger.info("A2A Protocol initialized")
-        
-        self.evidence_manager = EvidenceManager(
-            db_path="./data/sandbox.db",
-            event_bus=self.event_bus,
-            artifacts_dir="./data/artifacts"
-        )
         
         self.session_manager = SessionManager(
             db_path="./data/sandbox.db",

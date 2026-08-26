@@ -154,6 +154,10 @@ class ConversationEngine:
                 
                 await self._process_turn()
                 
+                # Check for shutdown after each turn completes
+                if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
+                    break
+                
         except asyncio.CancelledError:
             logger.info("Conversation cancelled")
         except Exception as e:
@@ -172,6 +176,10 @@ class ConversationEngine:
             )
     
     async def _process_turn(self) -> None:
+        # Check for shutdown before starting turn
+        if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
+            return
+            
         speaker_id = self.scheduler.current_speaker
         agent = self.agents.get(speaker_id)
         
@@ -182,9 +190,17 @@ class ConversationEngine:
         
         self.state_machine.transition(SMState.THINKING)
         
+        # Check for shutdown after state transition
+        if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
+            return
+        
         context = self._build_context(speaker_id)
         
         self.state_machine.transition(SMState.GENERATING)
+        
+        # Check for shutdown before generation
+        if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
+            return
         
         try:
             response = await asyncio.wait_for(
@@ -197,6 +213,10 @@ class ConversationEngine:
         except Exception as e:
             logger.error(f"Agent {speaker_id} error: {e}")
             response = f"[Agent {speaker_id} error: {e}]"
+        
+        # Check for shutdown after generation
+        if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
+            return
         
         self.state_machine.transition(SMState.SPEAKING)
         
@@ -229,12 +249,20 @@ class ConversationEngine:
             }
         )
         
+        # Check for shutdown before observer
+        if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
+            return
+        
         self.state_machine.transition(SMState.OBSERVING)
         
         await self._maybe_trigger_observer()
         
         if self.memory_manager:
             await self.memory_manager.maybe_summarize(self.turn_number)
+        
+        # Check for shutdown before next turn
+        if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
+            return
         
         self.state_machine.transition(SMState.NEXT_TURN)
         

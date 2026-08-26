@@ -1,8 +1,8 @@
 model:
   host: "http://localhost:11434"
-  default: "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M"
-  observer: "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M"
-  memory: "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M"
+  default: "qwen2.5-coder:7b"
+  observer: "qwen2.5-coder:7b"
+  memory: "qwen2.5-coder:7b"
   context_window: 4096
   max_output_tokens: 1024
   temperature: 0.7

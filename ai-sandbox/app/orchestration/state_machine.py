@@ -96,6 +96,8 @@ class StateMachine:
         return False
     
     def shutdown(self) -> bool:
+        if self._state == ConversationState.GRACEFUL_SHUTDOWN:
+            return True
         return self.transition(ConversationState.GRACEFUL_SHUTDOWN)
     
     def reset(self) -> None:

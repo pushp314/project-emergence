@@ -23,11 +23,15 @@ class TerminalTool(Tool):
     ):
         self._timeout = timeout
         self._working_dir = working_dir or os.getcwd()
+        # Security: require explicit allowlist, deny by default
         self._allowed_commands = allowed_commands or []
         self._blocked_commands = blocked_commands or [
             "rm -rf /", "mkfs", "dd if=", "> /dev/", "shutdown", "reboot",
             "sudo", "su ", "chmod 777", "chown -R", "mount ", "umount "
         ]
+        
+        if not self._allowed_commands:
+            logger.warning("TerminalTool: No allowed_commands specified - all commands will be blocked!")
     
     @property
     def name(self) -> str:
