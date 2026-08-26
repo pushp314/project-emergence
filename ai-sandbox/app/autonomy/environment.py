@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 
 from app.events.bus import EventBus, Event, EventType, get_event_bus
-from app.events.schemas import AgentMessage, AgentRole
+from app.events.schemas import AgentMessage
 from app.memory import MemoryManager
 from app.tools import ToolGateway
 

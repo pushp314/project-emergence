@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Callable
 import logging
 
 from app.events.bus import EventBus, Event, EventType, get_event_bus
-from app.events.schemas import AgentMessage, AgentRole, ConversationState
+from app.events.schemas import AgentMessage, ConversationState
 from app.agents.base import BaseAgent, AgentContext
 from app.orchestration.scheduler import Scheduler, create_scheduler
 from app.orchestration.state_machine import StateMachine, ConversationState as SMState
@@ -127,7 +127,7 @@ class ConversationEngine:
     async def inject_human_message(self, content: str) -> None:
         message = AgentMessage(
             agent_id="human",
-            role=AgentRole.EXPLORER,
+            agent_identity="human",
             content=content,
             turn_number=self.turn_number
         )

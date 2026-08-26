@@ -193,18 +193,18 @@ class TestEventSchemas:
     """Test event schemas and data structures"""
     
     def test_event_creation(self):
-        from app.events.schemas import AgentMessage, AgentRole
+        from app.events.schemas import AgentMessage
         from app.events.bus import Event, EventType
         
         message = AgentMessage(
             agent_id="agent_a",
-            role=AgentRole.EXPLORER,
+            agent_identity="explorer",
             content="Hello world",
             turn_number=1
         )
         
         assert message.agent_id == "agent_a"
-        assert message.role == AgentRole.EXPLORER
+        assert message.agent_identity == "explorer"
         assert message.content == "Hello world"
         assert message.turn_number == 1
     

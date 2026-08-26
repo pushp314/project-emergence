@@ -15,73 +15,82 @@ Phase 9 - A2A Protocol (Complete) + Addon Implementation (Complete) + Documentat
 ✅ Documentation synchronized with autonomous agent design principles
 
 ## Completed
-
-### Core Architecture (Phases 1-9)
-- [x] Event Bus with structured event schemas
-- [x] Model Plane (Ollama adapter with streaming)
-- [x] Agent Plane (Explorer, Challenger, Observer) — **Note: Fixed roles in code, documentation updated to autonomous agents**
-- [x] Control Plane (Conversation Engine, Scheduler, State Machine)
-- [x] Phase 1: A/B converse indefinitely via event bus
-- [x] Phase 2: Audio (TTS via pyttsx3/edge-tts, STT via faster-whisper)
-- [x] Phase 3: Memory (SQLite store, summarization, context building)
-- [x] Phase 4: Observer Agent with event-triggered interventions
-- [x] Phase 5: Tools (Terminal, Filesystem, Web with permission gating)
-- [x] Phase 6: Permission System (6 levels, human approval)
-- [x] Phase 7: Resource Manager (RAM, CPU, latency monitoring with callbacks)
-- [x] Phase 8: Autonomous Environment (proposals, sessions, execution)
-- [x] Phase 9: A2A Protocol (agent cards, task requests, peer discovery)
+[COMPLETE] Event Bus with structured event schemas
+[COMPLETE] Model Plane (Ollama adapter with streaming)
+[COMPLETE] Agent Plane (Explorer, Challenger, Observer) — **Note: Fixed roles in code, documentation updated to autonomous agents**
+[COMPLETE] Control Plane (Conversation Engine, Scheduler, State Machine)
+[COMPLETE] Phase 1: A/B converse indefinitely via event bus
+[COMPLETE] Phase 2: Audio (TTS via pyttsx3/edge-tts, STT via faster-whisper)
+[COMPLETE] Phase 3: Memory (SQLite store, summarization, context building)
+[COMPLETE] Phase 4: Observer Agent with event-triggered interventions
+[COMPLETE] Phase 5: Tools (Terminal, Filesystem, Web with permission gating)
+[COMPLETE] Phase 6: Permission System (6 levels, human approval)
+[COMPLETE] Phase 7: Resource Manager (RAM, CPU, latency monitoring with callbacks)
+[COMPLETE] Phase 8: Autonomous Environment (proposals, sessions, execution)
+[COMPLETE] Phase 9: A2A Protocol (agent cards, task requests, peer discovery)
 
 ### Addon Implementations
-- [x] **Evidence Plane**: Structured evidence recording for all events
-- [x] **Experiment Sessions**: Session lifecycle management with recovery
-- [x] **Research/Browser Evidence**: Research manager with caching, provenance tracking
-- [x] **Decision Logging**: Decision records with evidence linkage
-- [x] **Artifact Management**: File artifacts with session/experiment/research linkage
-- [x] **Research Cache**: Duplicate detection and caching
-- [x] **Session Reports**: Final report generation with timeline
-- [x] **Session Recovery**: Resume interrupted sessions from checkpoints
-- [x] **Self-Modification Engine**: Git worktree-based isolated modifications
-- [x] **Capability Registry**: Agent-driven orchestration with model/tool/agent capabilities
-- [x] **CLI Interface**: Full command set (start, watch, interactive, status, sessions, memory, research, evidence, experiments, permissions, resources, timeline, report, modifications, rollback, inject)
+[COMPLETE] **Evidence Plane**: Structured evidence recording for all events
+[COMPLETE] **Experiment Sessions**: Session lifecycle management with recovery
+[COMPLETE] **Research/Browser Evidence**: Research manager with caching, provenance tracking
+[COMPLETE] **Decision Logging**: Decision records with evidence linkage
+[COMPLETE] **Artifact Management**: File artifacts with session/experiment/research linkage
+[COMPLETE] **Research Cache**: Duplicate detection and caching
+[COMPLETE] **Session Reports**: Final report generation with timeline
+[COMPLETE] **Session Recovery**: Resume interrupted sessions from checkpoints
+[COMPLETE] **Self-Modification Engine**: Git worktree-based isolated modifications
+[COMPLETE] **Capability Registry**: Agent-driven orchestration with model/tool/agent capabilities
+[COMPLETE] **CLI Interface**: Full command set (start, watch, interactive, status, sessions, memory, research, evidence, experiments, permissions, resources, timeline, report, modifications, rollback, inject)
 
 ### Database Schema
-- [x] Unified SQLite schema with all required entities:
-  - sessions, events, evidence, decisions, artifacts
-  - research_sessions, sources, claims
-  - experiments, permissions, tool_calls
-  - resource_metrics, modifications, session_metadata
-  - conversations, messages, memory_items
+[COMPLETE] Unified SQLite schema with all required entities:
+- sessions, events, evidence, decisions, artifacts
+- research_sessions, sources, claims
+- experiments, permissions, tool_calls
+- resource_metrics, modifications, session_metadata
+- conversations, messages, memory_items
 
 ### Testing & Verification
-- [x] CLI start/watch/interactive modes working
-- [x] Agents converse indefinitely through event bus
-- [x] Resource monitoring with warnings/critical callbacks
-- [x] Session creation, tracking, and completion
-- [x] Evidence recording for all event types
-- [x] Permission gating for tools
+[COMPLETE] CLI start/watch/interactive modes working
+[COMPLETE] Agents converse indefinitely through event bus
+[COMPLETE] Resource monitoring with warnings/critical callbacks
+[COMPLETE] Session creation, tracking, and completion
+[COMPLETE] Evidence recording for all event types
+[COMPLETE] Permission gating for tools
 
 ## In Progress
-- [ ] Performance benchmarking and optimization
-- [ ] Integration tests for all components
-- [ ] Stress testing for resource limits
-- [ ] Documentation completion
-- [ ] **Code changes to remove fixed agent roles** (see KNOWN_ISSUES.md)
-- [ ] **Implementation of emergence observation events** (see KNOWN_ISSUES.md)
-- [ ] **Implementation of 7-stage intent-action distinction** (see KNOWN_ISSUES.md)
-- [ ] **Implementation of self-assessment/role_change/disagreement events** (see KNOWN_ISSUES.md)
+[IN PROGRESS] Performance benchmarking and optimization
+[IN PROGRESS] Integration tests for all components
+[IN PROGRESS] Stress testing for resource limits
+
+## Code Changes Status
+[COMPLETE] AgentRole enum removed from schemas.py, replaced with agent_identity
+[COMPLETE] System prompts replaced with capability-based prompts
+[COMPLETE] DEFAULT_AGENT_CAPABILITIES fixed role assignments removed
+[COMPLETE] Emergence observation events added (emergence.observed, agent.self_assessment, agent.role_change, agent.disagreement)
+[COMPLETE] 7-stage intent-action distinction evidence pipeline implemented
+[COMPLETE] Agent identity based on capability, not role
+
+[IN PROGRESS] Performance benchmarking and optimization
+[IN PROGRESS] Integration tests for all components
+[IN PROGRESS] Stress testing for resource limits
 
 ## Blocked
-- None currently
+None currently
 
 ## Next Task
 1. Implement code changes to remove fixed agent roles from source (schemas.py, agents/, capabilities/registry.py)
 2. Add emergence observation event types and evidence schemas
 3. Add self-assessment, role change, disagreement event types
 4. Update agent system prompts to be capability-based not role-based
-5. Run comprehensive integration tests
-6. Add performance benchmarks
-7. Create deployment documentation
-8. Add more example configurations
+5. Implement Context Manager as separate component
+6. Implement Master Control Plane (auth, command bus, intervention, emergency)
+7. Implement autonomous agent decision loop (observe → plan → request → execute → evaluate)
+8. Implement browser session management with DOM/accessibility extraction
+9. Implement agent delegation and capability discovery
+10. Run comprehensive integration tests
+11. Add performance benchmarks
+12. Create deployment documentation
 
 ## Known Bugs
 - Minor: Ollama connector closed error during shutdown (non-fatal)
@@ -169,3 +178,6 @@ Implement code changes to align source with updated documentation:
 5. Add emergence observation events to evidence system
 6. Add self-assessment, role change, disagreement event types
 7. Implement 7-stage intent-action tracking in evidence system
+8. Implement Context Manager as separate component
+9. Implement Master Control Plane
+10. Implement autonomous agent decision loop

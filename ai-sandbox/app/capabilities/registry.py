@@ -36,17 +36,14 @@ class ToolCapability:
     risk_level: str = "low"
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-
 @dataclass
 class AgentCapability:
     agent_id: str
     name: str
-    role: str
     capabilities: List[str] = field(default_factory=list)
     preferred_models: List[str] = field(default_factory=list)
     available_tools: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
-
 
 @dataclass
 class CapabilityRequest:
@@ -284,11 +281,9 @@ DEFAULT_TOOL_CAPABILITIES = {
 }
 
 
-DEFAULT_AGENT_CAPABILITIES = {
-    "agent_a": AgentCapability(
+DEFAULT_AGENT_CAPABILITIES = {    "agent_a": AgentCapability(
         agent_id="agent_a",
         name="Agent A - Explorer",
-        role="explorer",
         capabilities=["explore", "research", "hypothesis_generation", "browser_research"],
         preferred_models=["qwen3-8b", "qwen2.5-coder-7b"],
         available_tools=["terminal", "filesystem", "web"]
@@ -296,7 +291,6 @@ DEFAULT_AGENT_CAPABILITIES = {
     "agent_b": AgentCapability(
         agent_id="agent_b",
         name="Agent B - Challenger",
-        role="challenger",
         capabilities=["critique", "verification", "deep_reasoning", "assumption_testing"],
         preferred_models=["deepseek-r1-7b", "qwen3-8b"],
         available_tools=["terminal", "filesystem", "web"]
@@ -304,7 +298,6 @@ DEFAULT_AGENT_CAPABILITIES = {
     "agent_c": AgentCapability(
         agent_id="agent_c",
         name="Agent C - Observer",
-        role="observer",
         capabilities=["monitoring", "pattern_detection", "intervention"],
         preferred_models=["qwen3-8b"],
         available_tools=[]

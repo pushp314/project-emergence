@@ -7,7 +7,7 @@ import asyncio
 import logging
 
 from app.events.bus import EventBus, Event, EventType, get_event_bus
-from app.events.schemas import AgentConfig, AgentRole, AgentMessage, ToolCall, ToolResult, PermissionRequest
+from app.events.schemas import AgentConfig, AgentMessage, ToolCall, ToolResult, PermissionRequest
 from app.models.base import ModelAdapter, GenerationRequest, GenerationResponse, get_model_registry
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ class BaseAgent(ABC):
             conversation_id=conversation_id,
             payload={
                 "agent_id": self.agent_id,
-                "role": self.config.role.value,
+                "identity": self.config.agent_identity,
                 "content": content,
                 "turn_number": turn_number
             },
@@ -190,7 +190,7 @@ class BaseAgent(ABC):
     def get_agent_info(self) -> Dict[str, Any]:
         return {
             "agent_id": self.agent_id,
-            "role": self.config.role.value,
+            "identity": self.config.agent_identity,
             "name": self.config.name,
             "model": self.config.model
         }

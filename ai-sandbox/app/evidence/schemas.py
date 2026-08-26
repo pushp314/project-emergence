@@ -33,6 +33,10 @@ class EvidenceType(str, Enum):
     OBSERVER_INTERVENTION = "observer_intervention"
     RESEARCH_STARTED = "research_started"
     RESEARCH_COMPLETED = "research_completed"
+    emergence_observed = "emergence_observed"
+    agent_self_assessment = "agent_self_assessment"
+    agent_role_change = "agent_role_change"
+    agent_disagreement = "agent_disagreement"
 
 
 class VerificationStatus(str, Enum):

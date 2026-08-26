@@ -10,7 +10,7 @@ from typing import Optional
 import yaml
 
 from app.events.bus import EventBus, EventType, get_event_bus, set_event_bus
-from app.events.schemas import AgentRole, PermissionLevel, RiskLevel
+from app.events.schemas import PermissionLevel, RiskLevel
 from app.models.base import get_model_registry
 from app.models.ollama import create_ollama_adapter, OllamaAdapter
 from app.models.base import ModelConfig

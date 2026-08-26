@@ -7,13 +7,23 @@ import logging
 
 from app.agents.base import BaseAgent, AgentContext, AgentConfig
 from app.events.bus import EventBus, Event, EventType, get_event_bus
-from app.events.schemas import AgentRole, ObserverState
 from app.models.base import ModelAdapter, GenerationRequest, get_model_registry
 
 logger = logging.getLogger(__name__)
 
 
-OBSERVER_ANALYSIS_PROMPT = """You are the Observer analyzing a conversation between Agent A (Explorer) and Agent B (Challenger).
+@dataclass
+class ObserverState:
+    current_topic: str = ""
+    important_discoveries: List[str] = field(default_factory=list)
+    contradictions: List[str] = field(default_factory=list)
+    open_questions: List[str] = field(default_factory=list)
+    repetition_score: float = 0.0
+    conversation_health: float = 1.0
+    last_intervention_turn: int = 0
+
+
+OBSERVER_ANALYSIS_PROMPT = """You are the Observer analyzing a conversation between two autonomous AI agents.
 
 Current conversation state:
 - Topic: {topic}
@@ -46,7 +56,7 @@ Contradiction indicators: "I agree" followed by opposing view, factual conflicts
 Health indicators: engagement, novelty, progress, depth"""
 
 
-OBSERVER_INTERVENTION_PROMPT = """You are the Observer intervening in a conversation.
+OBSERVER_INTERVENTION_PROMPT = """You are the Observer intervening in an autonomous AI conversation.
 
 Reason for intervention: {reason}
 Current topic: {topic}
@@ -238,9 +248,9 @@ def create_observer_agent(
     max_tokens: int = 512
 ) -> ObserverAgent:
     config = AgentConfig(
-        role=AgentRole.OBSERVER,
+        agent_identity="observer",
         name="Agent C - Observer",
-        system_prompt="""You are Agent C, the Observer. You normally remain SILENT and watch the conversation.
+        system_prompt="""You are an autonomous AI observer designed for conversation analysis and intervention.
 
 You maintain:
 - Current topic
@@ -249,6 +259,8 @@ You maintain:
 - Open questions
 - Repetition score
 - Conversation health
+
+You normally remain SILENT and watch the conversation.
 
 You ONLY intervene (speak) when:
 - Conversation becomes repetitive

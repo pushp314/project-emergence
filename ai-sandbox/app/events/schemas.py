@@ -23,12 +23,6 @@ class RiskLevel(str, Enum):
     CRITICAL = "critical"
 
 
-class AgentRole(str, Enum):
-    EXPLORER = "explorer"
-    CHALLENGER = "challenger"
-    OBSERVER = "observer"
-
-
 class ConversationState(str, Enum):
     IDLE = "idle"
     THINKING = "thinking"
@@ -49,7 +43,7 @@ class ToolPermission(str, Enum):
 
 @dataclass
 class AgentConfig:
-    role: AgentRole
+    agent_identity: str
     name: str
     system_prompt: str
     model: str
@@ -60,11 +54,12 @@ class AgentConfig:
 @dataclass
 class AgentMessage:
     agent_id: str
-    role: AgentRole
+    agent_identity: str
     content: str
     turn_number: int
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
+    intent: str = ""
 
 
 @dataclass
