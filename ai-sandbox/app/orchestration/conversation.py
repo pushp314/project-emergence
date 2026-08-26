@@ -51,6 +51,7 @@ class ConversationEngine:
         self._shutdown_requested = False
         self._turn_callbacks: List[Callable[[AgentMessage], None]] = []
         self._interrupt_callbacks: List[Callable[[], None]] = []
+        self._thinking_callbacks: List[Callable[[str, int], None]] = []
     
     @property
     def conversation_id(self) -> str:
@@ -66,6 +67,9 @@ class ConversationEngine:
     
     def add_turn_callback(self, callback: Callable[[AgentMessage], None]) -> None:
         self._turn_callbacks.append(callback)
+    
+    def add_thinking_callback(self, callback: Callable[[str, int], None]) -> None:
+        self._thinking_callbacks.append(callback)
     
     def add_interrupt_callback(self, callback: Callable[[], None]) -> None:
         self._interrupt_callbacks.append(callback)
@@ -197,6 +201,13 @@ class ConversationEngine:
         context = self._build_context(speaker_id)
         
         self.state_machine.transition(SMState.GENERATING)
+        
+        agent_name = agent.config.agent_identity if agent else speaker_id
+        for cb in self._thinking_callbacks:
+            try:
+                cb(agent_name, self.turn_number)
+            except Exception:
+                pass
         
         # Check for shutdown before generation
         if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:

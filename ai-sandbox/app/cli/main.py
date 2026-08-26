@@ -15,8 +15,6 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
-from rich.live import Live
-from rich.layout import Layout
 
 from app.main import SandboxApp
 from app.evidence import get_evidence_manager, EvidenceManager
@@ -109,6 +107,7 @@ async def _interactive_sandbox(config_path: str):
     cli_context.app = app
     
     app.conversation_engine.add_turn_callback(_on_turn_display)
+    app.conversation_engine.add_thinking_callback(_on_thinking)
     
     console.print(Panel.fit(
         "[bold cyan]AI SANDBOX[/bold cyan]",
@@ -155,7 +154,29 @@ async def _interactive_sandbox(config_path: str):
     await asyncio.gather(run_engine(), input_loop())
 
 
+_thinking_status = None
+
+def _on_thinking(agent_name: str, turn_number: int):
+    global _thinking_status
+    icons = {"atlas": "🧭", "argus": "🔍", "explorer": "🧭", "challenger": "🔍"}
+    icon = icons.get(agent_name, "•")
+    name = agent_name.upper()
+    if _thinking_status:
+        try:
+            _thinking_status.stop()
+        except Exception:
+            pass
+    _thinking_status = console.status(f"[dim]{icon} {name} is thinking...[/dim]", spinner="dots")
+    _thinking_status.start()
+
 def _on_turn_display(message):
+    global _thinking_status
+    if _thinking_status:
+        try:
+            _thinking_status.stop()
+        except Exception:
+            _thinking_status = None
+    
     identity_styles = {
         "atlas": {"color": "cyan", "icon": "🧭"},
         "argus": {"color": "magenta", "icon": "🔍"},
@@ -171,7 +192,8 @@ def _on_turn_display(message):
         message.content,
         title=f"[bold {style['color']}]{style['icon']} {name}[/bold {style['color']}]  Turn {message.turn_number}",
         border_style=style["color"],
-        padding=(0, 1)
+        padding=(0, 1),
+        width=min(console.width, 100)
     )
     console.print(panel)
 
