@@ -12,10 +12,11 @@ import yaml
 from app.events.bus import EventBus, EventType, get_event_bus, set_event_bus
 from app.events.schemas import PermissionLevel, RiskLevel
 from app.models.base import get_model_registry
+from app.models.mlx_server import MLXServerAdapter
+from app.models.gemini import GeminiAdapter
 from app.models.ollama import create_ollama_adapter, OllamaAdapter
 from app.models.base import ModelConfig
 from app.agents.explorer import create_explorer_agent
-from app.agents.challenger import create_challenger_agent
 from app.agents.observer import create_observer_agent
 from app.orchestration.conversation import ConversationEngine, ConversationConfig
 from app.orchestration.scheduler import create_scheduler
@@ -69,30 +70,25 @@ class SandboxApp:
     async def initialize(self) -> None:
         logger.info("Initializing AI Sandbox...")
         
-        model_config = self.config.get("model", {})
-        host = model_config.get("host", "http://127.0.0.1:11434")
-        default_model = model_config.get("default", "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M")
+        _ADAPTER_FACTORIES = {
+            "ollama": lambda cfg, route: create_ollama_adapter(cfg, route.get("host", "http://127.0.0.1:11434")),
+            "mlx": lambda cfg, route: MLXServerAdapter(cfg, route.get("host", "http://127.0.0.1:8081")),
+            "gemini": lambda cfg, route: GeminiAdapter(cfg),
+        }
         
-        adapter = await create_ollama_adapter(
-            ModelConfig(
-                name=default_model,
-                context_window=model_config.get("context_window", 4096),
-                max_output_tokens=model_config.get("max_output_tokens", 1024),
-                temperature=model_config.get("temperature", 0.7),
-                timeout_seconds=model_config.get("timeout", 120)
-            ),
-            host
-        )
-        
-        self.model_registry.register(default_model, adapter, is_default=True)
-        
-        observer_model = model_config.get("observer", default_model)
-        if observer_model != default_model:
-            obs_adapter = await create_ollama_adapter(
-                ModelConfig(name=observer_model),
-                host
+        routes = self.config.get("model", {}).get("routes", {})
+        for role_name, route in routes.items():
+            cfg = ModelConfig(
+                name=route["name"],
+                context_window=route.get("context_window", 4096),
+                max_output_tokens=route.get("max_output_tokens", 1024),
+                temperature=route.get("temperature", 0.7),
+                timeout_seconds=route.get("timeout", 120),
             )
-            self.model_registry.register(observer_model, obs_adapter)
+            adapter = _ADAPTER_FACTORIES[route["provider"]](cfg, route)
+            if asyncio.iscoroutine(adapter):
+                adapter = await adapter
+            self.model_registry.register(role_name, adapter, is_default=(role_name == "default"))
         
         logger.info("Models initialized")
         
@@ -102,7 +98,7 @@ class SandboxApp:
         summarization_interval = memory_config.get("summarization_interval", 10)
         
         store = SQLiteStore(db_path)
-        summarizer = MemorySummarizer(store, self.model_registry.get(default_model))
+        summarizer = MemorySummarizer(store, self.model_registry.get("default"))
         summarizer.set_interval(summarization_interval)
         self.memory_manager = MemoryManager(store, summarizer, self.event_bus, max_entries)
         
@@ -284,7 +280,8 @@ class SandboxApp:
         
         self.tool_gateway.set_permission_checker(permission_checker)
         
-        agent_a = create_explorer_agent("agent_a", default_model)
+        agent_c = create_observer_agent("agent_c", self.model_registry.get("observer"))
+        agent_a = create_explorer_agent("agent_a", self.model_registry.get("default"))
         agent_a.config.agent_identity = "manager"
         agent_a.config.name = "Manager CEO"
         agent_a.config.system_prompt = """You are the Manager Agent (CEO).
@@ -294,11 +291,11 @@ You MUST use the `delegate_task` tool to spawn specialized worker agents (e.g., 
 When the user gives you an objective, figure out what sub-tasks are needed, delegate them sequentially using `delegate_task`, and then aggregate the results to present the final answer to the user.
 You also have access to the `knowledge_search` tool. Use it to search your long-term memory for past facts, previous conversations, or system context.
 """
-        agent_b = create_challenger_agent("agent_b", default_model)
-        agent_c = create_observer_agent("agent_c", observer_model)
+       
         
         agents = {
             "agent_a": agent_a,
+            "agent_c": agent_c,
         }
         
         conv_config = self.config.get("conversation", {})

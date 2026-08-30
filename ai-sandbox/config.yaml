@@ -1,12 +1,22 @@
 model:
-  host: "http://localhost:11434"
-  default: "qwen2.5-coder:7b"
-  observer: "qwen2.5-coder:7b"
-  memory: "qwen2.5-coder:7b"
-  context_window: 4096
-  max_output_tokens: 512
-  temperature: 0.7
-  timeout: 1200
+  routes:
+    default:
+      provider: mlx
+      name: "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit"
+      host: "http://127.0.0.1:8081"
+      context_window: 8192
+    planning:
+      provider: gemini
+      name: "gemini-2.5-flash"
+      context_window: 1000000
+    critical_review:
+      provider: gemini
+      name: "gemini-2.5-pro"
+      context_window: 1000000
+    observer:
+      provider: mlx
+      name: "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit"
+      host: "http://127.0.0.1:8081"
 
 conversation:
   max_turns: 1000

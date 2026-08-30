@@ -47,11 +47,29 @@ class CreateToolTool(Tool):
         tool_name = arguments["tool_name"]
         code = arguments["code"]
         
+        import ast
+        
         # Security validation (basic)
         if not tool_name.isidentifier():
             return "Error: tool_name must be a valid Python identifier"
             
+        # AST parsing to block dangerous imports
+        dangerous_modules = {"os", "sys", "subprocess", "pty", "shutil", "socket"}
+        try:
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.split(".")[0] in dangerous_modules:
+                            return f"Security Error: Importing '{alias.name}' is strictly prohibited in dynamic tools."
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module and node.module.split(".")[0] in dangerous_modules:
+                        return f"Security Error: Importing from '{node.module}' is strictly prohibited in dynamic tools."
+        except SyntaxError as e:
+            return f"Syntax Error in provided code: {e}"
+            
         file_path = f"app/tools/dynamic/{tool_name}.py"
+        os.makedirs("app/tools/dynamic", exist_ok=True)
         with open(file_path, "w") as f:
             f.write(code)
             

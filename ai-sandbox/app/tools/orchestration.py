@@ -1,6 +1,6 @@
 from typing import Any, Dict
 import time
-from app.events.schemas import PermissionLevel, RiskLevel, AgentMessage, Role
+from app.events.schemas import PermissionLevel, RiskLevel, AgentMessage
 from app.tools.gateway import Tool
 from app.agents.base import ExplorerAgent, AgentConfig, AgentContext
 from app.events.bus import get_event_bus
@@ -53,7 +53,7 @@ class DelegateTaskTool(Tool):
             agent_identity=role.lower().replace(" ", "_"),
             name=role,
             system_prompt=f"You are a {role}. Your sole objective is to complete the following task: {task}\nYou have full access to tools.",
-            model="hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M",
+            model="default",
             temperature=0.2,
             max_tokens=2048
         )

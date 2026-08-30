@@ -241,40 +241,23 @@ class ObserverAgent(BaseAgent):
         return self.state
 
 
+from typing import Union
+from app.models.base import ModelAdapter
+
 def create_observer_agent(
     agent_id: str = "agent_c",
-    model: str = "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M",
-    temperature: float = 0.5,
+    model: Union[str, ModelAdapter] = "default",
+    temperature: float = 0.3,
     max_tokens: int = 512
 ) -> ObserverAgent:
+    model_name = model.get_model_info()["name"] if isinstance(model, ModelAdapter) else model
     config = AgentConfig(
         agent_identity="observer",
-        name="Observer",
-        system_prompt="""You are an autonomous AI observer designed for conversation analysis and intervention.
-
-You maintain:
-- Current topic
-- Important discoveries
-- Contradictions
-- Open questions
-- Repetition score
-- Conversation health
-
-You normally remain SILENT and watch the conversation.
-
-You ONLY intervene (speak) when:
-- Conversation becomes repetitive
-- An important insight appears
-- Agents contradict themselves
-- Discussion becomes directionless
-- A useful new direction emerges
-- Human intervention needs interpretation
-
-When you do speak, emit an observer_intervention event with your analysis.
-
-Your responses should be concise analytical observations, not participation in the discussion.""",
-        model=model,
+        name="The Observer",
+        system_prompt="""You are the Observer. You watch the conversation and intervene only when necessary.
+You maintain the conversation health and track important discoveries.""",
+        model=model_name,
         temperature=temperature,
         max_tokens=max_tokens
     )
-    return ObserverAgent(agent_id, config)
+    return ObserverAgent(agent_id, config, model_adapter=model if isinstance(model, ModelAdapter) else None)

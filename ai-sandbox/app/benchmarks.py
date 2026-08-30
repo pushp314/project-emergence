@@ -202,7 +202,7 @@ def bench_context_manager() -> BenchmarkResult:
 
 
 def bench_scheduler_round_robin() -> BenchmarkResult:
-    agents = ["explorer", "challenger", "observer"]
+    agents = ["explorer", "observer"]
     sched = create_scheduler(agents, policy_name="round_robin")
     sched.start()
 
@@ -223,7 +223,7 @@ def bench_scheduler_round_robin() -> BenchmarkResult:
 
 
 def bench_scheduler_adaptive() -> BenchmarkResult:
-    agents = ["explorer", "challenger", "observer"]
+    agents = ["explorer", "observer"]
     sched = create_scheduler(agents, policy_name="adaptive")
     sched.start()
 
@@ -252,7 +252,7 @@ def bench_memory_per_agent() -> BenchmarkResult:
     store = SQLiteStore(_temp_db())
     ctx = ContextManager(store=store, summarizer=_FakeSummarizer())
     sched = create_scheduler(
-        ["explorer", "challenger", "observer"], policy_name="round_robin"
+        ["explorer", "observer"], policy_name="round_robin"
     )
 
     snap_before = tracemalloc.take_snapshot()

@@ -158,7 +158,7 @@ _thinking_status = None
 
 def _on_thinking(agent_name: str, turn_number: int):
     global _thinking_status
-    icons = {"atlas": "🧭", "argus": "🔍", "explorer": "🧭", "challenger": "🔍"}
+    icons = {"atlas": "🧭", "argus": "🔍", "explorer": "🧭"}
     icon = icons.get(agent_name, "•")
     name = agent_name.upper()
     if _thinking_status:
@@ -181,7 +181,6 @@ def _on_turn_display(message):
         "atlas": {"color": "cyan", "icon": "🧭"},
         "argus": {"color": "magenta", "icon": "🔍"},
         "explorer": {"color": "cyan", "icon": "🧭"},
-        "challenger": {"color": "magenta", "icon": "🔍"},
         "observer": {"color": "yellow", "icon": "👁"},
         "human": {"color": "green", "icon": "👤"}
     }

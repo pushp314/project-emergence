@@ -28,7 +28,11 @@ class MasterController:
     """
     def __init__(self, event_bus: Optional[EventBus] = None):
         self.event_bus = event_bus or get_event_bus()
-        self._auth_pin: str = "0000"  # Default PIN for CLI authentication
+        import os
+        pin = os.environ.get("MASTER_PIN")
+        if not pin:
+            raise ValueError("MASTER_PIN not set in environment! Master Control Plane authentication cannot start unsecured.")
+        self._auth_pin: str = pin
         self._authenticated: bool = False
     
     def authenticate(self, pin: str) -> bool:

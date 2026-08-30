@@ -5,7 +5,7 @@ class ArchitectAgent(BaseAgent):
     """Architect Agent: Focuses on system design and delegation."""
     
     @classmethod
-    def create(cls, agent_id: str, event_bus, model: str = "deepseek-r1-7b") -> 'ArchitectAgent':
+    def create(cls, agent_id: str, event_bus, model: str = "default") -> 'ArchitectAgent':
         config = AgentConfig(
             name="Architect",
             model=model,
@@ -26,7 +26,7 @@ class CoderAgent(BaseAgent):
     """Coder Agent: Focuses exclusively on writing code."""
     
     @classmethod
-    def create(cls, agent_id: str, event_bus, model: str = "deepseek-r1-7b") -> 'CoderAgent':
+    def create(cls, agent_id: str, event_bus, model: str = "default") -> 'CoderAgent':
         config = AgentConfig(
             name="Coder",
             model=model,
@@ -46,7 +46,7 @@ class QAAgent(BaseAgent):
     """QA Agent: Focuses on testing and code review."""
     
     @classmethod
-    def create(cls, agent_id: str, event_bus, model: str = "deepseek-r1-7b") -> 'QAAgent':
+    def create(cls, agent_id: str, event_bus, model: str = "default") -> 'QAAgent':
         config = AgentConfig(
             name="QA",
             model=model,

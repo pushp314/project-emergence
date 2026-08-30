@@ -531,7 +531,6 @@ class TestConversationEngine:
         from app.events.bus import EventBus
         from app.orchestration.conversation import ConversationEngine, ConversationConfig
         from app.agents.explorer import create_explorer_agent
-        from app.agents.challenger import create_challenger_agent
         from app.models.base import ModelAdapter, GenerationRequest, GenerationResponse, get_model_registry
         
         event_bus = EventBus()
@@ -570,7 +569,7 @@ class TestConversationEngine:
         model_registry.register("test-model", mock_adapter, is_default=True)
         
         agent_a = create_explorer_agent("agent_a", "test-model")
-        agent_b = create_challenger_agent("agent_b", "test-model")
+        agent_b = create_explorer_agent("agent_b", "test-model")
         
         agents = {"agent_a": agent_a, "agent_b": agent_b}
         
@@ -582,7 +581,9 @@ class TestConversationEngine:
             initial_speaker="agent_a",
             scheduler_policy="round_robin"
         )
-        
+    
+        import os
+        os.environ["MASTER_PIN"] = "0000"
         engine = ConversationEngine(config, agents, event_bus)
         
         # Test that engine initializes correctly

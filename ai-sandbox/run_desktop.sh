@@ -1,7 +1,8 @@
 #!/bin/bash
 # A2A Sandbox Native Desktop Launcher
-# Change to correct directory
-cd "$(dirname "$0")" || cd /Users/pushp/Desktop/A2A/ai-sandbox
+# Change to correct directory (force absolute path for launchd)
+DIR="/Users/pushp/Desktop/A2A/ai-sandbox"
+cd "$DIR" || exit 1
 
 # Check if venv exists, create it if it doesn't
 if [ ! -d "venv" ]; then
