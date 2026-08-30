@@ -15,6 +15,14 @@ else
     source venv/bin/activate || true
 fi
 
+# Load environment variables if .env exists
+if [ -f .env ]; then
+    echo "[System] Loading .env file..."
+    set -a
+    source .env
+    set +a
+fi
+
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 echo "==================================="

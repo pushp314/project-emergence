@@ -3,12 +3,13 @@ from PyQt6.QtWidgets import (
     QTextEdit, QPushButton, QLineEdit, QLabel, QCheckBox,
     QTabWidget, QListWidget, QMessageBox
 )
-from PyQt6.QtCore import pyqtSignal, pyqtSlot
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, QTimer
 import asyncio
 from app.main import SandboxApp
 import logging
 from app.voice.engine import get_voice_engine
 from app.voice.listener import ContinuousVoiceListener
+from app.orchestration.goal_loop import GoalState
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,26 @@ class MainWindow(QMainWindow):
         self.memory_list.setStyleSheet("background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 8px; padding: 8px; font-size: 13px;")
         mem_layout.addWidget(self.memory_list)
         
+        # Tab 3: Goal Tracker
+        self.tab_goal = QWidget()
+        goal_layout = QVBoxLayout(self.tab_goal)
+        self.tabs.addTab(self.tab_goal, "🎯 Goal Tracker")
+        
+        # Goal Status
+        self.goal_status_label = QLabel("Goal Engine: IDLE")
+        self.goal_status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #8b5cf6;")
+        goal_layout.addWidget(self.goal_status_label)
+        
+        # Goal Plan List
+        self.goal_plan_list = QListWidget()
+        self.goal_plan_list.setStyleSheet("background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 8px; padding: 8px; font-size: 13px;")
+        goal_layout.addWidget(self.goal_plan_list)
+        
+        # Timer for polling GoalEngine
+        self.goal_timer = QTimer(self)
+        self.goal_timer.timeout.connect(self.update_goal_ui)
+        self.goal_timer.start(1000) # Poll every 1 second
+        
         # Status Label
         self.status_label = QLabel("Initializing...")
         layout.addWidget(self.status_label)
@@ -138,6 +159,20 @@ class MainWindow(QMainWindow):
         controls_layout.addWidget(self.resume_btn)
         
         layout.addLayout(controls_layout)
+        
+        # Master Objective Control
+        master_layout = QHBoxLayout()
+        self.master_input = QLineEdit()
+        self.master_input.setPlaceholderText("Set Master Objective for Goal Engine...")
+        self.master_input.setStyleSheet("padding: 8px; font-size: 14px; border: 1px solid #8b5cf6;")
+        master_layout.addWidget(self.master_input)
+        
+        self.start_goal_btn = QPushButton("Start Goal")
+        self.start_goal_btn.setStyleSheet("background-color: #8b5cf6; color: white; padding: 8px; font-size: 14px; font-weight: bold;")
+        self.start_goal_btn.clicked.connect(self.start_master_goal)
+        master_layout.addWidget(self.start_goal_btn)
+        
+        layout.addLayout(master_layout)
         
         # CTA Quick Actions
         cta_layout = QHBoxLayout()
@@ -279,6 +314,17 @@ class MainWindow(QMainWindow):
             self.task_input.clear()
             self._dispatch_preset(text)
 
+    def start_master_goal(self):
+        text = self.master_input.text().strip()
+        if text:
+            self.master_input.clear()
+            if self.sandbox_app.goal_engine:
+                self.sandbox_app.goal_engine.start_goal(text)
+                self.log_view.append(f"<span style='color: #8b5cf6; font-weight: bold;'>SYSTEM:</span> Master Goal set: {text}<br>")
+                self.tabs.setCurrentWidget(self.tab_goal)
+            else:
+                self.log_view.append("<span style='color: #ef4444; font-weight: bold;'>ERROR:</span> Goal Engine not initialized.<br>")
+
     def _dispatch_preset(self, text: str):
         self.log_view.append(f"<span style='color: #38bdf8; font-weight: bold;'>HUMAN (You):</span> {text}<br>")
         asyncio.create_task(self.sandbox_app.conversation_engine.inject_human_message(text))
@@ -346,3 +392,44 @@ class MainWindow(QMainWindow):
                 self.memory_list.addItem(f"Timeout fetching memory: {e}")
         else:
             self.memory_list.addItem("Memory Manager not initialized in sandbox_app.")
+
+    def update_goal_ui(self):
+        if not hasattr(self.sandbox_app, 'goal_engine') or not self.sandbox_app.goal_engine:
+            return
+            
+        engine = self.sandbox_app.goal_engine
+        
+        state_colors = {
+            GoalState.IDLE: "#94a3b8",
+            GoalState.PLANNING: "#3b82f6",
+            GoalState.ACTING: "#f59e0b",
+            GoalState.CRITIQUING: "#8b5cf6",
+            GoalState.DONE: "#10b981",
+            GoalState.FAILED: "#ef4444"
+        }
+        
+        color = state_colors.get(engine.state, "#94a3b8")
+        status_text = f"Goal Engine: {engine.state.value.upper()}"
+        
+        if engine.context:
+            status_text += f" | Objective: {engine.context.objective}"
+            
+        self.goal_status_label.setText(status_text)
+        self.goal_status_label.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {color};")
+        
+        # Update plan list if context exists
+        if engine.context and engine.context.plan:
+            # Only update if the plan length or current step changed to avoid flicker
+            if self.goal_plan_list.count() != len(engine.context.plan) or \
+               getattr(self, '_last_goal_step', -1) != engine.context.current_step:
+                
+                self.goal_plan_list.clear()
+                for i, step in enumerate(engine.context.plan):
+                    status = " "
+                    if i < engine.context.current_step:
+                        status = "✅"
+                    elif i == engine.context.current_step:
+                        status = "▶️"
+                    self.goal_plan_list.addItem(f"{status} [{i+1}] {step}")
+                
+                self._last_goal_step = engine.context.current_step

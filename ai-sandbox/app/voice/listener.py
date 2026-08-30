@@ -3,8 +3,11 @@ import logging
 import pyaudio
 import wave
 import io
-import webrtcvad
 import collections
+try:
+    import webrtcvad
+except ImportError:
+    webrtcvad = None
 from app.voice.engine import get_voice_engine
 from app.main import SandboxApp
 
