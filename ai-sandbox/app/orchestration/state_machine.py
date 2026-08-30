@@ -26,13 +26,13 @@ class StateMachine:
         self._previous_state: Optional[ConversationState] = None
         self._transition_handlers: Dict[ConversationState, List[Callable]] = {}
         self._allowed_transitions: Dict[ConversationState, Set[ConversationState]] = {
-            ConversationState.IDLE: {ConversationState.THINKING, ConversationState.GRACEFUL_SHUTDOWN},
+            ConversationState.IDLE: {ConversationState.THINKING, ConversationState.PAUSED, ConversationState.GRACEFUL_SHUTDOWN},
             ConversationState.THINKING: {ConversationState.GENERATING, ConversationState.PAUSED, ConversationState.GRACEFUL_SHUTDOWN},
             ConversationState.GENERATING: {ConversationState.SPEAKING, ConversationState.PAUSED, ConversationState.GRACEFUL_SHUTDOWN},
             ConversationState.SPEAKING: {ConversationState.OBSERVING, ConversationState.PAUSED, ConversationState.GRACEFUL_SHUTDOWN},
             ConversationState.OBSERVING: {ConversationState.NEXT_TURN, ConversationState.PAUSED, ConversationState.GRACEFUL_SHUTDOWN},
             ConversationState.NEXT_TURN: {ConversationState.THINKING, ConversationState.IDLE, ConversationState.PAUSED, ConversationState.GRACEFUL_SHUTDOWN},
-            ConversationState.PAUSED: {ConversationState.PROCESS_HUMAN_INPUT, ConversationState.THINKING, ConversationState.GRACEFUL_SHUTDOWN},
+            ConversationState.PAUSED: {ConversationState.PROCESS_HUMAN_INPUT, ConversationState.THINKING, ConversationState.IDLE, ConversationState.GRACEFUL_SHUTDOWN},
             ConversationState.PROCESS_HUMAN_INPUT: {ConversationState.THINKING, ConversationState.IDLE, ConversationState.GRACEFUL_SHUTDOWN},
             ConversationState.GRACEFUL_SHUTDOWN: set(),
         }

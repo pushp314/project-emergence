@@ -12,6 +12,7 @@ from app.agents.base import BaseAgent, AgentContext
 from app.orchestration.scheduler import Scheduler, create_scheduler
 from app.orchestration.state_machine import StateMachine, ConversationState as SMState
 from app.memory import MemoryManager, ContextManager
+from app.master.manager import get_master_controller
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class ConversationConfig:
     max_turns: int = 1000
     turn_timeout_seconds: int = 120
     short_term_turns: int = 8
+    autonomy_enabled: bool = False
     initial_speaker: str = "agent_a"
     scheduler_policy: str = "round_robin"
 
@@ -38,6 +40,7 @@ class ConversationEngine:
         self.agents = agents
         self.event_bus = event_bus or get_event_bus()
         self.context_manager = context_manager
+        self.master_controller = get_master_controller()
         
         self.state_machine = StateMachine()
         self.scheduler = create_scheduler(
@@ -52,6 +55,38 @@ class ConversationEngine:
         self._turn_callbacks: List[Callable[[AgentMessage], None]] = []
         self._interrupt_callbacks: List[Callable[[], None]] = []
         self._thinking_callbacks: List[Callable[[str, int], None]] = []
+        
+        self.event_bus.subscribe(EventType.MASTER_COMMAND_RECEIVED, self._handle_master_command)
+        self.event_bus.subscribe(EventType.EMERGENCY_STOP_TRIGGERED, self._handle_emergency_stop)
+    
+    def _handle_master_command(self, event: Event) -> None:
+        if event.conversation_id != self.conversation_id and event.conversation_id != "":
+            return
+        
+        command_type = event.payload.get("command_type")
+        if command_type == "PAUSE_AGENT":
+            self.state_machine.pause()
+        elif command_type == "SET_OBJECTIVE":
+            target = event.payload.get("target")
+            payload = event.payload.get("payload", {})
+            objective = payload.get("objective", "")
+            if target == "all":
+                for agent in self.agents.values():
+                    agent.config.system_prompt += f"\nMaster Objective: {objective}"
+            elif target in self.agents:
+                self.agents[target].config.system_prompt += f"\nMaster Objective: {objective}"
+        elif command_type == "ASSIGN_TASK":
+            payload = event.payload.get("payload", {})
+            task = payload.get("task", "")
+            if task:
+                asyncio.create_task(self.inject_human_message(f"New Task Assigned: {task}"))
+
+    def _handle_emergency_stop(self, event: Event) -> None:
+        if event.conversation_id != self.conversation_id and event.conversation_id != "":
+            return
+        logger.critical("EMERGENCY STOP RECEIVED - Halting conversation immediately")
+        self._shutdown_requested = True
+        self.state_machine.shutdown()
     
     @property
     def conversation_id(self) -> str:
@@ -89,6 +124,9 @@ class ConversationEngine:
             self.conversation_id,
             {"turn_number": 1, "speaker": self.scheduler.current_speaker}
         )
+        
+        # Start paused so the agent only acts when the human assigns a task
+        self.state_machine.pause()
         
         await self._run_conversation()
     
@@ -141,6 +179,9 @@ class ConversationEngine:
             self.conversation_id,
             {"content": content, "turn_number": self.turn_number}
         )
+        
+        # Resume the engine now that the human has provided input
+        await self.resume()
     
     async def _run_conversation(self) -> None:
         try:
@@ -284,6 +325,10 @@ class ConversationEngine:
             self.conversation_id,
             {"turn_number": self.turn_number + 1, "speaker": self.scheduler.current_speaker}
         )
+        
+        # Pause after turn completion to wait for human input, unless autonomy is enabled
+        if not self.config.autonomy_enabled:
+            await self.pause()
     
     def _build_context(self, speaker_id: str) -> AgentContext:
         recent = self._message_history[-self.config.short_term_turns:] if self._message_history else []
@@ -302,12 +347,19 @@ class ConversationEngine:
             except Exception as e:
                 logger.debug(f"Could not fetch memory context: {e}")
         
+        import json
+        from app.tools.gateway import get_tool_gateway
+        tools = [
+            f"{tool.name}: {tool.description} - Schema: {json.dumps(tool.input_schema)}"
+            for tool in get_tool_gateway().list_tools()
+        ]
+        
         return AgentContext(
             conversation_id=self.conversation_id,
             turn_number=self.turn_number,
             recent_messages=recent,
             memory_summary=memory_summary,
-            available_tools=[],
+            available_tools=tools,
             pending_permissions=[]
         )
     

@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright, Browser, Page, Playwright
 
 from app.tools.gateway import Tool
 from app.events.schemas import PermissionLevel, RiskLevel
@@ -19,21 +16,22 @@ logger = logging.getLogger(__name__)
 class WebTool(Tool):
     def __init__(
         self,
-        timeout: int = 30,
-        max_response_size: int = 1024 * 1024,
+        timeout: int = 30000,
         allowed_domains: Optional[List[str]] = None,
         blocked_domains: Optional[List[str]] = None,
         user_agent: str = "AI-Sandbox/1.0"
     ):
         self._timeout = timeout
-        self._max_response_size = max_response_size
         self._allowed_domains = allowed_domains
         self._blocked_domains = blocked_domains or [
             "localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254",
             "metadata.google.internal", "metadata.azure.com"
         ]
         self._user_agent = user_agent
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._playwright: Optional[Playwright] = None
+        self._browser: Optional[Browser] = None
+        self._page: Optional[Page] = None
+        self._lock = asyncio.Lock()
     
     @property
     def name(self) -> str:
@@ -41,7 +39,7 @@ class WebTool(Tool):
     
     @property
     def description(self) -> str:
-        return "Fetch web pages, search the web, and extract content from URLs."
+        return "Full browser autonomy: navigate, click, type, search, and extract accessibility trees using Playwright."
     
     @property
     def input_schema(self) -> Dict[str, Any]:
@@ -50,25 +48,24 @@ class WebTool(Tool):
             "properties": {
                 "operation": {
                     "type": "string",
-                    "enum": ["fetch", "search", "extract"],
+                    "enum": ["navigate", "click", "type", "extract_a11y_tree", "extract_text", "search", "extract_screenshot"],
                     "description": "Operation to perform"
                 },
                 "url": {
                     "type": "string",
-                    "description": "URL to fetch (for fetch/extract operations)"
+                    "description": "URL to navigate to or search"
                 },
                 "query": {
                     "type": "string",
-                    "description": "Search query (for search operation)"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "Maximum search results (default: 10)",
-                    "default": 10
+                    "description": "Search query"
                 },
                 "selector": {
                     "type": "string",
-                    "description": "CSS selector for extract operation"
+                    "description": "CSS selector for click, type, or extract operations"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Text to type"
                 }
             },
             "required": ["operation"]
@@ -86,177 +83,124 @@ class WebTool(Tool):
     def enabled(self) -> bool:
         return True
     
-    async def _ensure_session(self) -> aiohttp.ClientSession:
-        if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=self._timeout)
-            self._session = aiohttp.ClientSession(
-                timeout=timeout,
-                headers={"User-Agent": self._user_agent}
-            )
-        return self._session
+    async def _ensure_browser(self) -> Page:
+        if self._playwright is None:
+            self._playwright = await async_playwright().start()
+        if self._browser is None:
+            self._browser = await self._playwright.chromium.launch(headless=True)
+        if self._page is None:
+            self._page = await self._browser.new_page(user_agent=self._user_agent)
+            self._page.set_default_timeout(self._timeout)
+        return self._page
     
     def _is_domain_allowed(self, url: str) -> tuple[bool, str]:
         try:
             parsed = urllib.parse.urlparse(url)
-            domain = parsed.netloc.lower()
+            hostname = parsed.hostname
             
-            for blocked in self._blocked_domains:
-                if blocked in domain:
-                    return False, f"Blocked domain: {blocked}"
+            if not hostname:
+                return False, "Invalid URL"
             
             if self._allowed_domains:
-                allowed = False
-                for allowed_domain in self._allowed_domains:
-                    if allowed_domain in domain:
-                        allowed = True
-                        break
-                if not allowed:
-                    return False, f"Domain not in allowed list: {self._allowed_domains}"
+                if not any(hostname.endswith(d) for d in self._allowed_domains):
+                    return False, f"Domain {hostname} not in allowed list"
+            
+            if self._blocked_domains:
+                if any(hostname == d or hostname.endswith(f".{d}") for d in self._blocked_domains):
+                    return False, f"Domain {hostname} is blocked"
             
             return True, ""
         except Exception as e:
-            return False, f"Invalid URL: {e}"
+            return False, f"URL parse error: {str(e)}"
     
     async def execute(self, arguments: Dict[str, Any]) -> Any:
-        operation = arguments.get("operation", "").lower()
+        operation = arguments.get("operation")
+        if not operation:
+            raise ValueError("Missing 'operation' argument")
         
-        if operation == "fetch":
-            url = arguments.get("url", "")
-            if not url:
-                return {"error": "Missing URL for fetch operation"}
-            return await self._fetch(url)
-        
-        elif operation == "search":
-            query = arguments.get("query", "")
-            if not query:
-                return {"error": "Missing query for search operation"}
-            max_results = arguments.get("max_results", 10)
-            return await self._search(query, max_results)
-        
-        elif operation == "extract":
-            url = arguments.get("url", "")
-            selector = arguments.get("selector", "")
-            if not url:
-                return {"error": "Missing URL for extract operation"}
-            return await self._extract(url, selector)
-        
-        else:
-            return {"error": f"Unknown operation: {operation}"}
-    
-    async def _fetch(self, url: str) -> Dict[str, Any]:
-        allowed, reason = self._is_domain_allowed(url)
-        if not allowed:
-            return {"error": reason, "url": url}
-        
-        session = await self._ensure_session()
-        
-        try:
-            async with session.get(url) as response:
-                content_type = response.headers.get("Content-Type", "")
-                
-                if "text/" not in content_type and "application/json" not in content_type:
-                    return {
-                        "error": f"Unsupported content type: {content_type}",
-                        "url": url,
-                        "status": response.status
-                    }
-                
-                content = await response.text()
-                
-                if len(content) > self._max_response_size:
-                    content = content[:self._max_response_size] + "... [truncated]"
-                
-                return {
-                    "url": url,
-                    "status": response.status,
-                    "content_type": content_type,
-                    "content": content,
-                    "headers": dict(response.headers)
-                }
-                
-        except asyncio.TimeoutError:
-            return {"error": f"Request timed out after {self._timeout}s", "url": url}
-        except aiohttp.ClientError as e:
-            return {"error": f"Request failed: {e}", "url": url}
-        except Exception as e:
-            return {"error": str(e), "url": url}
-    
-    async def _search(self, query: str, max_results: int) -> Dict[str, Any]:
-        encoded_query = urllib.parse.quote_plus(query)
-        search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
-        
-        session = await self._ensure_session()
-        
-        try:
-            async with session.get(search_url) as response:
-                html = await response.text()
+        async with self._lock:
+            page = await self._ensure_browser()
             
-            soup = BeautifulSoup(html, "html.parser")
-            results = []
-            
-            for result in soup.find_all("a", class_="result__snippet")[:max_results]:
-                title_elem = result.find_previous("a", class_="result__url")
-                link_elem = result.find_parent("a", class_="result__snippet")
+            if operation == "navigate":
+                url = arguments.get("url")
+                if not url:
+                    raise ValueError("navigate operation requires 'url'")
+                if not url.startswith("http"):
+                    url = "https://" + url
                 
-                text = result.get_text(strip=True)
-                link = link_elem.get("href", "") if link_elem else ""
-                title = title_elem.get_text(strip=True) if title_elem else ""
+                allowed, reason = self._is_domain_allowed(url)
+                if not allowed:
+                    raise PermissionError(f"Navigation blocked: {reason}")
                 
-                if text and link:
-                    results.append({
-                        "title": title,
-                        "snippet": text,
-                        "url": link
-                    })
+                await page.goto(url, wait_until="domcontentloaded")
+                return {"status": "success", "url": page.url, "title": await page.title()}
             
-            if not results:
-                for link in soup.find_all("a", class_="result__url")[:max_results]:
-                    text = link.get_text(strip=True)
-                    url = link.get("href", "")
-                    if text and url:
+            elif operation == "search":
+                query = arguments.get("query")
+                if not query:
+                    raise ValueError("search operation requires 'query'")
+                
+                search_url = f"https://duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+                await page.goto(search_url, wait_until="domcontentloaded")
+                
+                results = []
+                elements = await page.query_selector_all(".result__body")
+                for el in elements[:10]:
+                    title_el = await el.query_selector(".result__title")
+                    link_el = await el.query_selector(".result__url")
+                    snippet_el = await el.query_selector(".result__snippet")
+                    if title_el and link_el and snippet_el:
                         results.append({
-                            "title": text,
-                            "snippet": "",
-                            "url": url
+                            "title": await title_el.inner_text(),
+                            "url": await link_el.inner_text(),
+                            "snippet": await snippet_el.inner_text()
                         })
+                
+                return {"status": "success", "results": results}
             
-            return {
-                "query": query,
-                "results": results[:max_results],
-                "count": len(results)
-            }
+            elif operation == "click":
+                selector = arguments.get("selector")
+                if not selector:
+                    raise ValueError("click operation requires 'selector'")
+                await page.click(selector)
+                await page.wait_for_load_state("domcontentloaded")
+                return {"status": "success", "url": page.url, "title": await page.title()}
             
-        except Exception as e:
-            return {"error": f"Search failed: {e}", "query": query, "results": []}
-    
-    async def _extract(self, url: str, selector: str = "") -> Dict[str, Any]:
-        fetch_result = await self._fetch(url)
-        
-        if "error" in fetch_result:
-            return fetch_result
-        
-        content = fetch_result.get("content", "")
-        
-        try:
-            soup = BeautifulSoup(content, "html.parser")
+            elif operation == "type":
+                selector = arguments.get("selector")
+                text = arguments.get("text")
+                if not selector or not text:
+                    raise ValueError("type operation requires 'selector' and 'text'")
+                await page.fill(selector, text)
+                return {"status": "success"}
             
-            if selector:
-                elements = soup.select(selector)
-                extracted = [elem.get_text(strip=True) for elem in elements]
+            elif operation == "extract_a11y_tree":
+                # Playwright's accessibility snapshot provides a great tree representation of the DOM
+                snapshot = await page.accessibility.snapshot()
+                return {"status": "success", "a11y_tree": snapshot}
+            
+            elif operation == "extract_text":
+                selector = arguments.get("selector", "body")
+                element = await page.query_selector(selector)
+                if not element:
+                    raise ValueError(f"Selector '{selector}' not found")
+                text = await element.inner_text()
+                return {"status": "success", "text": text}
+            
+            elif operation == "extract_screenshot":
+                import base64
+                screenshot_bytes = await page.screenshot(type="png")
+                b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+                return {"status": "success", "image_base64": b64}
+            
             else:
-                for script in soup(["script", "style", "nav", "footer", "header"]):
-                    script.decompose()
-                extracted = [soup.get_text(separator="\n", strip=True)]
-            
-            return {
-                "url": url,
-                "selector": selector,
-                "extracted": extracted
-            }
-            
-        except Exception as e:
-            return {"error": f"Extraction failed: {e}", "url": url}
+                raise ValueError(f"Unknown operation: {operation}")
     
-    async def close(self) -> None:
-        if self._session and not self._session.closed:
-            await self._session.close()
+    async def cleanup(self):
+        if self._browser:
+            await self._browser.close()
+        if self._playwright:
+            await self._playwright.stop()
+        self._page = None
+        self._browser = None
+        self._playwright = None

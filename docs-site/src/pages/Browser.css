@@ -1,0 +1,40 @@
+.security-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.security-item {
+    display: flex;
+    gap: 20px;
+    padding: 16px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.security-label {
+    flex-shrink: 0;
+    width: 120px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--accent-light);
+}
+
+.security-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
+@media (max-width: 768px) {
+    .security-item {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .security-label {
+        width: auto;
+    }
+}

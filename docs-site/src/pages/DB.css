@@ -1,0 +1,96 @@
+.callout-card {
+    display: flex;
+    gap: 16px;
+    padding: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    margin: 20px 0;
+}
+
+.callout-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.callout-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.callout-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
+.db-command-list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.db-command-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    transition: var(--transition);
+}
+
+.db-command-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow);
+}
+
+.db-command-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.db-command-header code {
+    font-size: 1rem;
+}
+
+.db-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.db-badge-ok {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.db-badge-write {
+    background: rgba(234, 179, 8, 0.15);
+    color: var(--warning);
+}
+
+.db-command-desc {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.7;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+    .db-command-card {
+        padding: 20px;
+    }
+
+    .db-command-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}

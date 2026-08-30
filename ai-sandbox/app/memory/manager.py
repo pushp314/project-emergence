@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from app.memory.store import SQLiteStore, ConversationRecord, MemoryRecord
 from app.memory.summarizer import MemorySummarizer
 from app.memory.context_manager import ContextManager, ContextSnapshot, ContextBudget, ContextState
@@ -102,7 +102,7 @@ class MemoryManager:
             content=content,
             importance=importance,
             metadata=metadata or {},
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat()
         )
         self.store.save_memory(record)
         

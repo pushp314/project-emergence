@@ -9,10 +9,12 @@ from app.events.bus import EventBus
 async def context_manager():
     store = Mock()
     store.save_message = Mock()
+    store.save_message_async = AsyncMock()
     store.get_messages = Mock(return_value=[])
     store.get_latest_summary = Mock(return_value=None)
     store.get_all_summaries = Mock(return_value=[])
     store.get_memory = Mock(return_value=[])
+    store.get_memory_async = AsyncMock(return_value=[])
     
     summarizer = Mock()
     summarizer.build_context = Mock(return_value={"recent_messages": [], "summary": "Test Summary"})

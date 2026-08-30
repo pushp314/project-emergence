@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.memory.store import SQLiteStore, ConversationRecord
 from app.events.bus import get_event_bus
@@ -24,7 +24,7 @@ class ContextSnapshot:
     role_distribution: Dict[str, int]
     evidence_summary: Dict[str, int]
     resource_state: str = "GREEN"
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -80,12 +80,14 @@ class ContextManager:
         store,
         summarizer,
         event_bus=None,
+        vector_store=None,
         max_context_tokens: int = 8192,
         summarization_interval: int = 10
     ):
         self.store = store
         self.summarizer = summarizer
         self.event_bus = event_bus or get_event_bus()
+        self.vector_store = vector_store
         self.max_context_tokens = max_context_tokens
         self.summarization_interval = summarization_interval
         self.state: Optional[ContextState] = None
@@ -114,16 +116,29 @@ class ContextManager:
             )
 
         # Record the message
-        self.store.save_message(ConversationRecord(
-            id=str(uuid.uuid4()),
+        msg_id = str(uuid.uuid4())
+        await self.store.save_message_async(ConversationRecord(
+            id=msg_id,
             conversation_id=self.state.conversation_id,
             turn_number=current_turn,
             agent_id=getattr(message, "agent_id", ""),
             role=getattr(message, "agent_identity", "unknown"),
             content=getattr(message, "content", ""),
-            timestamp=getattr(message, "timestamp", datetime.utcnow().isoformat()),
+            timestamp=getattr(message, "timestamp", datetime.now(timezone.utc).isoformat()),
             metadata=getattr(message, "metadata", {}),
         ))
+        
+        if self.vector_store and getattr(message, "content", ""):
+            await self.vector_store.add_memory_async(
+                memory_id=msg_id,
+                content=getattr(message, "content", ""),
+                metadata={
+                    "conversation_id": self.state.conversation_id,
+                    "type": "message",
+                    "role": getattr(message, "agent_identity", "unknown"),
+                    "turn": current_turn
+                }
+            )
 
         # Update state
         self.state.total_turns = current_turn
@@ -145,12 +160,23 @@ class ContextManager:
         )
 
         # Get memory entries
-        important_facts = self.store.get_memory(
+        important_facts = await self.store.get_memory_async(
             self.state.conversation_id, type_filter="fact", limit=20
         )
-        open_questions = self.store.get_memory(
+        open_questions = await self.store.get_memory_async(
             self.state.conversation_id, type_filter="question", limit=20
         )
+        
+        # Vector memory augmentation
+        semantic_memories = []
+        if self.vector_store and getattr(message, "content", ""):
+            results = await self.vector_store.query_memories_async(
+                query=getattr(message, "content", ""),
+                n_results=3,
+                where={"conversation_id": self.state.conversation_id}
+            )
+            semantic_memories = [r["content"] for r in results]
+            important_facts.extend([type("obj", (object,), {"content": c}) for c in semantic_memories])
 
         # Build snapshot
         recent_messages = []

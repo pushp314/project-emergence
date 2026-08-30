@@ -53,7 +53,7 @@ class TestDatabaseBackup:
             intent="test backup",
             reason="testing backup preserves data"
         )
-        manager._save_evidence(evidence)
+        await manager._save_evidence(evidence)
         
         backup_path = manager.backup(backup_dir)
         assert backup_path is not None
@@ -92,7 +92,7 @@ class TestDatabaseBackup:
             intent="test restore",
             reason="testing restore recovers data"
         )
-        manager._save_evidence(evidence)
+        await manager._save_evidence(evidence)
         
         backup_path = manager.backup(backup_dir)
         assert backup_path is not None
@@ -167,7 +167,7 @@ class TestDatabaseHealth:
             intent="health check",
             reason="testing row counts"
         )
-        manager._save_evidence(evidence)
+        await manager._save_evidence(evidence)
         
         health = manager.get_db_health()
         

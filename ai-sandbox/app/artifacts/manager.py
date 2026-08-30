@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, BinaryIO
 
@@ -86,7 +86,7 @@ class ArtifactManager:
             created_by_action=created_by_action,
             experiment_id=experiment_id,
             research_id=research_id,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             metadata={
                 "content_hash": content_hash,
                 **(metadata or {})

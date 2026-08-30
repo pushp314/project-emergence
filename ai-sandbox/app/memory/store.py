@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+import asyncio
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import logging
@@ -245,7 +246,7 @@ class SQLiteStore:
             conn.execute("""
                 INSERT OR REPLACE INTO conversation_state (conversation_id, current_turn, current_topic, state_data, updated_at)
                 VALUES (?, ?, ?, ?, ?)
-            """, (conversation_id, current_turn, current_topic, json.dumps(state_data), datetime.utcnow().isoformat()))
+            """, (conversation_id, current_turn, current_topic, json.dumps(state_data), datetime.now(timezone.utc).isoformat()))
             conn.commit()
     
     def load_state(self, conversation_id: str) -> Optional[Dict[str, Any]]:
@@ -270,3 +271,11 @@ class SQLiteStore:
             conn.execute("DELETE FROM summaries WHERE conversation_id = ?", (conversation_id,))
             conn.execute("DELETE FROM conversation_state WHERE conversation_id = ?", (conversation_id,))
             conn.commit()
+
+    async def save_message_async(self, record: ConversationRecord) -> None:
+        """Async wrapper for save_message."""
+        await asyncio.to_thread(self.save_message, record)
+
+    async def get_memory_async(self, conversation_id: str, type_filter: Optional[str] = None, limit: int = 100) -> List[MemoryRecord]:
+        """Async wrapper for get_memory."""
+        return await asyncio.to_thread(self.get_memory, conversation_id, type_filter, limit)

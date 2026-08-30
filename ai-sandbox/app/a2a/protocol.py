@@ -5,7 +5,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 
@@ -36,7 +36,7 @@ class A2AMessage:
     conversation_id: str = ""
     payload: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     
     def to_json(self) -> str:
         return json.dumps({
@@ -61,7 +61,7 @@ class A2AMessage:
             conversation_id=d.get("conversation_id", ""),
             payload=d.get("payload", {}),
             metadata=d.get("metadata", {}),
-            timestamp=d.get("timestamp", datetime.utcnow().isoformat())
+            timestamp=d.get("timestamp", datetime.now(timezone.utc).isoformat())
         )
 
 
@@ -151,7 +151,7 @@ class A2AProtocol:
         self._conversations[conv_id] = {
             "task_type": task_type,
             "status": "pending",
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         
         await self.send_message(message)
@@ -179,7 +179,7 @@ class A2AProtocol:
         if conversation_id in self._conversations:
             self._conversations[conversation_id]["status"] = "completed" if success else "failed"
             self._conversations[conversation_id]["result"] = result
-            self._conversations[conversation_id]["completed_at"] = datetime.utcnow().isoformat()
+            self._conversations[conversation_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
         
         await self.send_message(message)
     

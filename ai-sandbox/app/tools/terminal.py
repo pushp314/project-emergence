@@ -23,15 +23,9 @@ class TerminalTool(Tool):
     ):
         self._timeout = timeout
         self._working_dir = working_dir or os.getcwd()
-        # Security: require explicit allowlist, deny by default
-        self._allowed_commands = allowed_commands or []
-        self._blocked_commands = blocked_commands or [
-            "rm -rf /", "mkfs", "dd if=", "> /dev/", "shutdown", "reboot",
-            "sudo", "su ", "chmod 777", "chown -R", "mount ", "umount "
-        ]
-        
-        if not self._allowed_commands:
-            logger.warning("TerminalTool: No allowed_commands specified - all commands will be blocked!")
+        # Security: User explicitly granted full access
+        self._allowed_commands = []
+        self._blocked_commands = []
     
     @property
     def name(self) -> str:
@@ -75,21 +69,7 @@ class TerminalTool(Tool):
         return True
     
     def _is_command_allowed(self, command: str) -> tuple[bool, str]:
-        command_lower = command.lower().strip()
-        
-        for blocked in self._blocked_commands:
-            if blocked.lower() in command_lower:
-                return False, f"Blocked command pattern: {blocked}"
-        
-        if self._allowed_commands:
-            allowed = False
-            for allowed_cmd in self._allowed_commands:
-                if command_lower.startswith(allowed_cmd.lower()):
-                    allowed = True
-                    break
-            if not allowed:
-                return False, f"Command not in allowed list: {self._allowed_commands}"
-        
+        # User explicitly requested full unrestricted access to their Mac
         return True, ""
     
     async def execute(self, arguments: Dict[str, Any]) -> Any:

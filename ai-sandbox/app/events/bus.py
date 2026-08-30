@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import inspect
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 import asyncio
@@ -47,6 +48,9 @@ class EventType(str, Enum):
     SYSTEM_RESUME = "system.resume"
     SYSTEM_STOP = "system.stop"
     
+    MASTER_COMMAND_RECEIVED = "master.command.received"
+    EMERGENCY_STOP_TRIGGERED = "system.emergency_stop"
+    
     CONVERSATION_TURN_START = "conversation.turn.start"
     CONVERSATION_TURN_END = "conversation.turn.end"
     CONVERSATION_SUMMARIZED = "conversation.summarized"
@@ -57,7 +61,7 @@ class Event:
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     type: EventType = EventType.AGENT_MESSAGE
     conversation_id: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     payload: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     
@@ -78,7 +82,7 @@ class Event:
             event_id=d.get("event_id", str(uuid.uuid4())),
             type=EventType(d["type"]),
             conversation_id=d.get("conversation_id", ""),
-            timestamp=d.get("timestamp", datetime.utcnow().isoformat()),
+            timestamp=d.get("timestamp", datetime.now(timezone.utc).isoformat()),
             payload=d.get("payload", {}),
             metadata=d.get("metadata", {})
         )
@@ -115,13 +119,13 @@ class EventBus:
         
         if event.type in self._subscribers:
             for callback in self._subscribers[event.type]:
-                if asyncio.iscoroutinefunction(callback):
+                if inspect.iscoroutinefunction(callback):
                     tasks.append(asyncio.create_task(callback(event)))
                 else:
                     tasks.append(asyncio.create_task(asyncio.to_thread(callback, event)))
         
         for callback in self._wildcard_subscribers:
-            if asyncio.iscoroutinefunction(callback):
+            if inspect.iscoroutinefunction(callback):
                 tasks.append(asyncio.create_task(callback(event)))
             else:
                 tasks.append(asyncio.create_task(asyncio.to_thread(callback, event)))

@@ -128,16 +128,55 @@ class EdgeTTS(TTSAdapter):
     async def speak(self, text: str) -> None:
         try:
             import edge_tts
-            communicate = edge_tts.Communicate(text, self._config.voice or "en-US-AriaNeural")
+            import tempfile
+            import os
+            import subprocess
+            import atexit
+            import signal
+            
             self._speaking = True
             self._stop_event.clear()
             
-            async for chunk in communicate.stream():
-                if self._stop_event.is_set():
-                    break
-                if chunk["type"] == "audio":
-                    pass
+            communicate = edge_tts.Communicate(text, self._config.voice if self._config.voice != "default" else "en-US-AriaNeural")
             
+            # Save to temporary mp3
+            fd, temp_path = tempfile.mkstemp(suffix=".mp3")
+            os.close(fd)
+            
+            await communicate.save(temp_path)
+            
+            if not self._stop_event.is_set():
+                # Play using macOS afplay
+                process = await asyncio.create_subprocess_exec(
+                    'afplay', temp_path,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                
+                # Register atexit handler to kill orphaned afplay if app crashes
+                pid = process.pid
+                def cleanup_audio():
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                    except OSError:
+                        pass
+                atexit.register(cleanup_audio)
+                
+                # Wait for playback or stop event
+                while process.returncode is None:
+                    if self._stop_event.is_set():
+                        process.terminate()
+                        break
+                    await asyncio.sleep(0.1)
+                
+                atexit.unregister(cleanup_audio)
+            
+            # Cleanup
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+                
         except ImportError:
             logger.warning("edge-tts not installed")
         except Exception as e:
@@ -192,13 +231,16 @@ def create_tts_adapter(config: TTSConfig, enabled: bool = True) -> TTSAdapter:
     if not enabled:
         return NullTTS(config)
     
+    # Prioritize high-quality EdgeTTS first
     try:
-        import pyttsx3
-        return Pyttsx3TTS(config)
+        import edge_tts
+        logger.info("Using EdgeTTS for high-quality human voice")
+        return EdgeTTS(config)
     except ImportError:
         try:
-            import edge_tts
-            return EdgeTTS(config)
+            import pyttsx3
+            logger.info("Using Pyttsx3 for offline voice")
+            return Pyttsx3TTS(config)
         except ImportError:
             logger.warning("No TTS backend available, using null TTS")
             return NullTTS(config)

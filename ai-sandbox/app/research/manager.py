@@ -7,7 +7,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.evidence.manager import get_evidence_manager
@@ -70,7 +70,7 @@ class ResearchManager:
             question=question,
             reason=reason,
             status="in_progress",
-            started_at=datetime.utcnow().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         
         self._research_cache[cache_key] = research
@@ -112,7 +112,7 @@ class ResearchManager:
                     url=result.get("url", ""),
                     title=result.get("title", ""),
                     domain=self._extract_domain(result.get("url", "")),
-                    retrieved_at=datetime.utcnow().isoformat(),
+                    retrieved_at=datetime.now(timezone.utc).isoformat(),
                     content_reference=result.get("snippet", ""),
                     metadata={"search_rank": i, "result": result}
                 )
@@ -138,7 +138,7 @@ class ResearchManager:
                         await self._extract_content(agent_id, research, url)
             
             research.status = "completed"
-            research.completed_at = datetime.utcnow().isoformat()
+            research.completed_at = datetime.now(timezone.utc).isoformat()
             self.evidence_manager.record_research(research)
             
             evidence = Evidence(
@@ -157,7 +157,7 @@ class ResearchManager:
         except Exception as e:
             logger.error(f"Research failed: {e}")
             research.status = "failed"
-            research.completed_at = datetime.utcnow().isoformat()
+            research.completed_at = datetime.now(timezone.utc).isoformat()
             self.evidence_manager.record_research(research)
             
             evidence = Evidence(
@@ -202,7 +202,7 @@ class ResearchManager:
                         url=url,
                         title=extract_result.get("title", ""),
                         domain=self._extract_domain(url),
-                        retrieved_at=datetime.utcnow().isoformat(),
+                        retrieved_at=datetime.now(timezone.utc).isoformat(),
                         content_reference=content[:5000],
                         metadata={"extracted_length": len(content)}
                     )
@@ -253,7 +253,7 @@ class ResearchManager:
             confidence=confidence,
             verification_status=VerificationStatus.PENDING,
             supporting_evidence=supporting_evidence or [],
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         
         self.evidence_manager.record_claim(claim_obj)
@@ -267,7 +267,7 @@ class ResearchManager:
         
         claim = self._claim_cache[claim_id]
         claim.verification_status = status
-        claim.verified_at = datetime.utcnow().isoformat()
+        claim.verified_at = datetime.now(timezone.utc).isoformat()
         
         if evidence_ids:
             claim.supporting_evidence = evidence_ids

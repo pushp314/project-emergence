@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import timezone
 
 import json
 from typing import Any, Dict, List, Optional
@@ -86,7 +87,7 @@ class MemorySummarizer:
                 key_points=result.get("key_points", []),
                 unresolved_questions=result.get("unresolved_questions", []),
                 important_facts=result.get("important_facts", []),
-                created_at=__import__('datetime').datetime.utcnow().isoformat()
+                created_at=__import__('datetime').datetime.now(timezone.utc).isoformat()
             )
             
             self.store.save_summary(summary_record)

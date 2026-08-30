@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
-import aiohttp
+import httpx
 import logging
 
 from app.models.base import ModelAdapter, ModelConfig, GenerationRequest, GenerationResponse
@@ -13,17 +13,16 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaAdapter(ModelAdapter):
-    def __init__(self, config: ModelConfig, host: str = "http://localhost:11434"):
+    def __init__(self, config: ModelConfig, host: str = "http://127.0.0.1:11434"):
         self._config = config
         self._host = host.rstrip("/")
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._client: Optional[httpx.AsyncClient] = None
         self._model_loaded = False
     
-    async def _ensure_session(self) -> aiohttp.ClientSession:
-        if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=self._config.timeout_seconds)
-            self._session = aiohttp.ClientSession(timeout=timeout)
-        return self._session
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self._config.timeout_seconds)
+        return self._client
     
     async def _ensure_model_loaded(self) -> None:
         if not self._model_loaded:
@@ -31,20 +30,20 @@ class OllamaAdapter(ModelAdapter):
             self._model_loaded = True
     
     async def _pull_model(self) -> None:
-        session = await self._ensure_session()
+        client = await self._ensure_client()
         try:
-            async with session.post(
+            resp = await client.post(
                 f"{self._host}/api/pull",
                 json={"name": self._config.name, "stream": False}
-            ) as resp:
-                if resp.status != 200:
-                    logger.warning(f"Model pull returned {resp.status}: {await resp.text()}")
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Model pull returned {resp.status_code}: {resp.text}")
         except Exception as e:
             logger.warning(f"Failed to pull model {self._config.name}: {e}")
     
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         await self._ensure_model_loaded()
-        session = await self._ensure_session()
+        client = await self._ensure_client()
         
         start_time = time.time()
         
@@ -69,28 +68,27 @@ class OllamaAdapter(ModelAdapter):
             payload["options"]["stop"] = request.stop_sequences
         
         try:
-            async with session.post(f"{self._host}/api/chat", json=payload) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    raise RuntimeError(f"Ollama API error {resp.status}: {error_text}")
-                
-                data = await resp.json()
-                
-                latency_ms = (time.time() - start_time) * 1000
-                
-                message = data.get("message", {})
-                text = message.get("content", "")
-                
-                tokens = data.get("eval_count", 0)
-                
-                return GenerationResponse(
-                    text=text,
-                    tokens_generated=tokens,
-                    finish_reason=data.get("done_reason", "stop"),
-                    latency_ms=latency_ms,
-                    model=self._config.name
-                )
-        except asyncio.TimeoutError:
+            resp = await client.post(f"{self._host}/api/chat", json=payload)
+            if resp.status_code != 200:
+                raise RuntimeError(f"Ollama API error {resp.status_code}: {resp.text}")
+            
+            data = resp.json()
+            
+            latency_ms = (time.time() - start_time) * 1000
+            
+            message = data.get("message", {})
+            text = message.get("content", "")
+            
+            tokens = data.get("eval_count", 0)
+            
+            return GenerationResponse(
+                text=text,
+                tokens_generated=tokens,
+                finish_reason=data.get("done_reason", "stop"),
+                latency_ms=latency_ms,
+                model=self._config.name
+            )
+        except httpx.TimeoutException:
             raise TimeoutError(f"Ollama generation timed out after {self._config.timeout_seconds}s")
         except Exception as e:
             logger.error(f"Ollama generation failed: {e}")
@@ -98,7 +96,7 @@ class OllamaAdapter(ModelAdapter):
     
     async def generate_stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         await self._ensure_model_loaded()
-        session = await self._ensure_session()
+        client = await self._ensure_client()
         
         messages = request.messages or []
         if request.system_prompt:
@@ -121,16 +119,16 @@ class OllamaAdapter(ModelAdapter):
             payload["options"]["stop"] = request.stop_sequences
         
         try:
-            async with session.post(f"{self._host}/api/chat", json=payload) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    raise RuntimeError(f"Ollama API error {resp.status}: {error_text}")
+            async with client.stream("POST", f"{self._host}/api/chat", json=payload) as resp:
+                if resp.status_code != 200:
+                    await resp.aread()
+                    raise RuntimeError(f"Ollama API error {resp.status_code}: {resp.text}")
                 
-                async for line in resp.content:
+                async for line in resp.aiter_lines():
                     if not line:
                         continue
                     try:
-                        data = json.loads(line.decode("utf-8"))
+                        data = json.loads(line)
                         if "message" in data and "content" in data["message"]:
                             chunk = data["message"]["content"]
                             if chunk:
@@ -139,31 +137,31 @@ class OllamaAdapter(ModelAdapter):
                             break
                     except json.JSONDecodeError:
                         continue
-        except asyncio.TimeoutError:
+        except httpx.TimeoutException:
             raise TimeoutError(f"Ollama streaming timed out after {self._config.timeout_seconds}s")
         except Exception as e:
             logger.error(f"Ollama streaming failed: {e}")
             raise
     
     async def count_tokens(self, text: str) -> int:
-        session = await self._ensure_session()
+        client = await self._ensure_client()
         try:
-            async with session.post(
+            resp = await client.post(
                 f"{self._host}/api/embeddings",
                 json={"model": self._config.name, "prompt": text}
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return len(data.get("embedding", []))
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return len(data.get("embedding", []))
         except Exception:
             pass
         return len(text) // 4
     
     async def health_check(self) -> bool:
         try:
-            session = await self._ensure_session()
-            async with session.get(f"{self._host}/api/tags") as resp:
-                return resp.status == 200
+            client = await self._ensure_client()
+            resp = await client.get(f"{self._host}/api/tags")
+            return resp.status_code == 200
         except Exception:
             return False
     
@@ -178,13 +176,13 @@ class OllamaAdapter(ModelAdapter):
         }
     
     async def close(self) -> None:
-        if self._session and not self._session.closed:
-            await self._session.close()
-            self._session = None
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
         self._model_loaded = False
 
 
-async def create_ollama_adapter(config: ModelConfig, host: str = "http://localhost:11434") -> OllamaAdapter:
+async def create_ollama_adapter(config: ModelConfig, host: str = "http://127.0.0.1:11434") -> OllamaAdapter:
     adapter = OllamaAdapter(config, host)
     healthy = await adapter.health_check()
     if not healthy:

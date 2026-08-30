@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 import uuid
@@ -73,7 +73,7 @@ class Evidence:
     session_id: str = ""
     agent_id: str = ""
     evidence_type: EvidenceType = EvidenceType.AGENT_ACTION
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     correlation_id: str = ""
     intent: str = ""
     reason: str = ""
@@ -94,7 +94,7 @@ class IntentActionRecord:
     agent_id: str = ""
     correlation_id: str = ""
     stage: IntentActionStage = IntentActionStage.SENSE
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     content: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -107,7 +107,7 @@ class Source:
     title: str = ""
     domain: str = ""
     publisher: str = ""
-    retrieved_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    retrieved_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     content_reference: str = ""
     content_hash: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -125,7 +125,7 @@ class Claim:
     verification_status: VerificationStatus = VerificationStatus.PENDING
     supporting_evidence: List[str] = field(default_factory=list)
     contradicting_evidence: List[str] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     verified_at: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -141,7 +141,7 @@ class ResearchSession:
     sources: List[str] = field(default_factory=list)
     claims: List[str] = field(default_factory=list)
     conclusion: str = ""
-    started_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -177,7 +177,7 @@ class Decision:
     evidence_considered: List[str] = field(default_factory=list)
     alternatives: List[str] = field(default_factory=list)
     resulting_action: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -193,7 +193,7 @@ class Artifact:
     created_by_action: str = ""
     experiment_id: Optional[str] = None
     research_id: Optional[str] = None
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -217,7 +217,7 @@ class ModificationRecord:
     approval: Optional[str] = None
     applied_commit: Optional[str] = None
     rollback_commit: Optional[str] = None
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
     evidence: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)

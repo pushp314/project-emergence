@@ -6,7 +6,7 @@ import logging
 import random
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 
@@ -37,7 +37,7 @@ class ExplorationProposal:
     estimated_turns: int = 5
     priority: float = 1.0
     status: ProposalStatus = ProposalStatus.PENDING
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -47,7 +47,7 @@ class ExplorationSession:
     proposal: Optional[ExplorationProposal] = None
     turns_spent: int = 0
     findings: List[str] = field(default_factory=list)
-    started_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
 
 
@@ -298,7 +298,7 @@ class AutonomousEnvironment:
             elif action == "conclude":
                 conclusion = result.get("conclusion", "")
                 session.findings.append(f"Conclusion: {conclusion}")
-                session.completed_at = datetime.utcnow().isoformat()
+                session.completed_at = datetime.now(timezone.utc).isoformat()
                 proposal.status = ProposalStatus.COMPLETED
                 
                 await self.event_bus.publish_type(

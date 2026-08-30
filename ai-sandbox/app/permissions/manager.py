@@ -4,7 +4,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 
@@ -121,7 +121,7 @@ class PermissionManager:
         
         pending.status = PermissionStatus.APPROVED
         pending.decided_by = decided_by
-        pending.decided_at = datetime.utcnow().isoformat()
+        pending.decided_at = datetime.now(timezone.utc).isoformat()
         
         if pending.future and not pending.future.done():
             pending.future.set_result(True)
@@ -141,7 +141,7 @@ class PermissionManager:
         
         pending.status = PermissionStatus.DENIED
         pending.decided_by = decided_by
-        pending.decided_at = datetime.utcnow().isoformat()
+        pending.decided_at = datetime.now(timezone.utc).isoformat()
         
         if pending.future and not pending.future.done():
             pending.future.set_result(False)

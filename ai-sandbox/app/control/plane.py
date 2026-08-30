@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -33,7 +33,7 @@ class Command:
     action: str = ""
     payload: Dict[str, Any] = field(default_factory=dict)
     source: str = "human"
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     requires_auth: bool = True
 
 
@@ -53,7 +53,7 @@ class MasterControlPlane:
     def __init__(self, event_bus: Optional[EventBus] = None):
         self.event_bus = event_bus or get_event_bus()
         self._state = SystemState()
-        self._state.started_at = datetime.utcnow()
+        self._state.started_at = datetime.now(timezone.utc)
         self._command_handlers: Dict[str, Callable] = {}
         self._intervention_handlers: List[Callable] = []
         self._lock = asyncio.Lock()
@@ -72,7 +72,7 @@ class MasterControlPlane:
             {
                 "reason": "emergency_stop",
                 "agents_affected": self._state.active_agents,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
         logger.critical("EMERGENCY STOP activated - all agents halted")
@@ -102,14 +102,14 @@ class MasterControlPlane:
         await self.event_bus.publish_type(
             EventType.SYSTEM_RESUME,
             "",
-            {"timestamp": datetime.utcnow().isoformat()},
+            {"timestamp": datetime.now(timezone.utc).isoformat()},
         )
         logger.info("All agents resumed")
         return self._state
 
     async def get_system_status(self) -> SystemState:
         if hasattr(self._state, "started_at"):
-            delta = (datetime.utcnow() - self._state.started_at).total_seconds()
+            delta = (datetime.now(timezone.utc) - self._state.started_at).total_seconds()
             self._state.uptime_seconds = delta
         return self._state
 
@@ -181,7 +181,7 @@ class MasterControlPlane:
                 "level": level.value,
                 "reason": reason,
                 "target_agent": target_agent,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 

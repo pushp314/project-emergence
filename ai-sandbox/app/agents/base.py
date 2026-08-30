@@ -10,6 +10,7 @@ from app.events.bus import EventBus, Event, EventType, get_event_bus
 from app.events.schemas import AgentConfig, AgentMessage, ToolCall, ToolResult, PermissionRequest
 from app.models.base import ModelAdapter, GenerationRequest, get_model_registry
 from app.memory.context_manager import ContextManager
+from app.capabilities.registry import get_capability_registry
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class BaseAgent(ABC):
         self.config = config
         self.event_bus = event_bus or get_event_bus()
         self.model_registry = get_model_registry()
+        self.capability_registry = get_capability_registry()
         self.model = model_adapter or self.model_registry.get(config.model)
         self._running = False
         self._current_turn = 0
@@ -43,6 +45,29 @@ class BaseAgent(ABC):
     @abstractmethod
     async def think(self, context: AgentContext) -> str:
         pass
+        
+    async def evaluate_strategies(self, context: AgentContext, problem: str, strategies: List[str]) -> str:
+        """
+        Evaluate multiple strategies and select the best one.
+        Can be overridden by subclasses for more advanced cognitive architectures (e.g. ToT).
+        """
+        prompt = f"Problem: {problem}\n\nPlease evaluate these strategies and pick the best one:\n"
+        for i, s in enumerate(strategies):
+            prompt += f"{i+1}. {s}\n"
+        prompt += "\nOutput your reasoning and end with the selected strategy number."
+        
+        request = GenerationRequest(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature,
+            stream=False
+        )
+        response = await self.model.generate(request)
+        return response.text
+    
+    def discover_capabilities(self, intent: str) -> Dict[str, Any]:
+        """Query the capability registry for tools/models matching the intent."""
+        return self.capability_registry.query_capabilities(intent)
     
     async def generate_response(self, context: AgentContext) -> str:
         self._current_turn = context.turn_number
@@ -60,7 +85,10 @@ class BaseAgent(ABC):
         
         for msg in context.recent_messages:
             role = "assistant" if msg.agent_id == self.agent_id else "user"
-            messages.append({"role": role, "content": f"[{msg.agent_identity}] {msg.content}"})
+            msg_dict = {"role": role, "content": f"[{msg.agent_identity}] {msg.content}"}
+            if msg.metadata and "images" in msg.metadata:
+                msg_dict["images"] = msg.metadata["images"]
+            messages.append(msg_dict)
         
         if not context.recent_messages:
             messages.append({"role": "user", "content": "Start a conversation. Pick a fascinating topic and share your first thoughts."})
@@ -385,7 +413,10 @@ class BaseAgent(ABC):
         
         for msg in context.recent_messages:
             role = "assistant" if msg.agent_id == self.agent_id else "user"
-            messages.append({"role": role, "content": f"[{msg.agent_identity}] {msg.content}"})
+            msg_dict = {"role": role, "content": f"[{msg.agent_identity}] {msg.content}"}
+            if msg.metadata and "images" in msg.metadata:
+                msg_dict["images"] = msg.metadata["images"]
+            messages.append(msg_dict)
         
         if not context.recent_messages:
             messages.append({"role": "user", "content": "Start a conversation. Pick a fascinating topic and share your first thoughts."})
@@ -459,34 +490,45 @@ class BaseAgent(ABC):
         """Generate a fallback response when action not useful."""
         return f"I need to reconsider my approach. {reason}"
 
-    async def _think_with_tools(self, context: AgentContext) -> str:
-        """Think with tool-calling capability."""
-        response = await self.generate_response(context)
-        
+    async def _think_with_tools(self, context: AgentContext, max_iterations: int = 5) -> str:
+        """Think with tool-calling capability, supporting recursive auto-healing."""
         import re, json
-        tool_pattern = r'\[TOOL:(\w+):(\{.*?\})\]'
-        matches = re.findall(tool_pattern, response)
+        tool_pattern = r'(?s)\[TOOL:(\w+):(\{.*?\})\]'
         
-        if not matches:
-            return response
+        full_response = ""
+        current_response = await self.generate_response(context)
         
-        tool_results = []
-        for tool_name, args_json in matches:
-            try:
-                args = json.loads(args_json)
-                result = await self._run_tool(tool_name, args)
-                tool_results.append(f"[{tool_name} result: {result}]")
-            except Exception as e:
-                tool_results.append(f"[{tool_name} error: {e}]")
-        
-        if tool_results:
-            tool_context = "\n".join(tool_results)
-            followup = await self._generate_with_tool_results(context, tool_context)
-            return response + "\n\n" + followup
-        
-        return response
+        for iteration in range(max_iterations):
+            full_response += current_response
+            matches = re.findall(tool_pattern, current_response)
+            
+            if not matches:
+                break
+                
+            tool_results = []
+            images = []
+            for tool_name, args_json in matches:
+                try:
+                    args = json.loads(args_json)
+                    text_res, image_res = await self._run_tool(context, tool_name, args)
+                    tool_results.append(f"[{tool_name} result: {text_res}]")
+                    if image_res:
+                        images.append(image_res)
+                except Exception as e:
+                    tool_results.append(f"[{tool_name} error: {e}]")
+            
+            if tool_results:
+                tool_context = "\n".join(tool_results)
+                full_response += "\n\n"
+                
+                # Update context with tool results to simulate inner monologue
+                current_response = await self._generate_with_tool_results(context, tool_context, images)
+            else:
+                break
+                
+        return full_response
     
-    async def _run_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def _run_tool(self, context: AgentContext, tool_name: str, arguments: Dict[str, Any]) -> tuple[str, Optional[str]]:
         """Execute a tool via the event bus."""
         from app.events.schemas import ToolCall, ToolResult
         call = ToolCall(
@@ -519,22 +561,36 @@ class BaseAgent(ABC):
         
         try:
             result = await asyncio.wait_for(future, timeout=30)
-            return str(result.result)[:500] if result.success else f"Error: {result.error}"
+            if not result.success:
+                return f"Error: {result.error}", None
+            
+            image_base64 = None
+            if isinstance(result.result, dict) and "image_base64" in result.result:
+                image_base64 = result.result.pop("image_base64")
+            
+            return str(result.result)[:500], image_base64
         except asyncio.TimeoutError:
-            return "Tool execution timed out"
+            return "Tool execution timed out", None
         finally:
             self.event_bus.unsubscribe(EventType.TOOL_COMPLETED, handler)
             self.event_bus.unsubscribe(EventType.TOOL_FAILED, handler)
     
-    async def _generate_with_tool_results(self, context: AgentContext, tool_results: str) -> str:
+    async def _generate_with_tool_results(self, context: AgentContext, tool_results: str, images: Optional[List[str]] = None) -> str:
         """Generate follow-up with tool results."""
         messages = []
         if self.config.system_prompt:
             messages.append({"role": "system", "content": self.config.system_prompt})
         for msg in context.recent_messages:
             role = "assistant" if msg.agent_id == self.agent_id else "user"
-            messages.append({"role": role, "content": f"[{msg.agent_identity}] {msg.content}"})
-        messages.append({"role": "user", "content": f"Tool results:\n{tool_results}\n\nContinue based on these results."})
+            msg_dict = {"role": role, "content": f"[{msg.agent_identity}] {msg.content}"}
+            if msg.metadata and "images" in msg.metadata:
+                msg_dict["images"] = msg.metadata["images"]
+            messages.append(msg_dict)
+            
+        tool_msg = {"role": "user", "content": f"Tool results:\n{tool_results}\n\nContinue based on these results."}
+        if images:
+            tool_msg["images"] = images
+        messages.append(tool_msg)
         
         request = GenerationRequest(messages=messages, max_tokens=self.config.max_tokens, temperature=self.config.temperature, stream=True)
         full_response = ""

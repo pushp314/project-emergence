@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 import uuid
@@ -57,7 +57,7 @@ class AgentMessage:
     agent_identity: str
     content: str
     turn_number: int
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
     intent: str = ""
 
@@ -78,7 +78,7 @@ class ToolCall:
     tool_name: str = ""
     arguments: Dict[str, Any] = field(default_factory=dict)
     agent_id: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -88,7 +88,7 @@ class ToolResult:
     success: bool
     result: Any = None
     error: Optional[str] = None
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -101,7 +101,7 @@ class PermissionRequest:
     risk: RiskLevel = RiskLevel.MEDIUM
     scope: PermissionLevel = PermissionLevel.READ
     duration: str = "once"
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     status: str = "pending"
 
 
@@ -110,7 +110,7 @@ class PermissionDecision:
     request_id: str
     approved: bool
     decided_by: str = "human"
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -119,7 +119,7 @@ class MemoryEntry:
     type: str = ""
     content: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     importance: float = 1.0
 
 
@@ -131,7 +131,7 @@ class ConversationSummary:
     key_points: List[str]
     unresolved_questions: List[str]
     important_facts: List[str]
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -143,7 +143,7 @@ class ResourceMetrics:
     generation_latency_ms: float = 0.0
     active_model: str = ""
     queue_length: int = 0
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass

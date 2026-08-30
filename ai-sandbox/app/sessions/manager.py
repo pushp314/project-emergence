@@ -7,7 +7,7 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 
@@ -134,8 +134,8 @@ class SessionManager:
             next_speaker=config.initial_speaker,
             agents=["agent_a", "agent_b", "agent_c"],
             config=config,
-            created_at=datetime.utcnow().isoformat(),
-            updated_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat()
         )
         
         with self._get_conn() as conn:
@@ -184,7 +184,7 @@ class SessionManager:
         session.current_turn = current_turn
         session.current_speaker = current_speaker
         session.next_speaker = next_speaker
-        session.updated_at = datetime.utcnow().isoformat()
+        session.updated_at = datetime.now(timezone.utc).isoformat()
         
         if status:
             session.status = status
@@ -207,7 +207,7 @@ class SessionManager:
             return False
         
         self._current_session.status = SessionStatus.PAUSED
-        self._current_session.updated_at = datetime.utcnow().isoformat()
+        self._current_session.updated_at = datetime.now(timezone.utc).isoformat()
         
         with self._get_conn() as conn:
             conn.execute("""
@@ -228,7 +228,7 @@ class SessionManager:
             return False
         
         self._current_session.status = SessionStatus.RUNNING
-        self._current_session.updated_at = datetime.utcnow().isoformat()
+        self._current_session.updated_at = datetime.now(timezone.utc).isoformat()
         
         with self._get_conn() as conn:
             conn.execute("""
@@ -249,13 +249,13 @@ class SessionManager:
             return
         
         self._current_session.status = status
-        self._current_session.updated_at = datetime.utcnow().isoformat()
+        self._current_session.updated_at = datetime.now(timezone.utc).isoformat()
         
         with self._get_conn() as conn:
             conn.execute("""
                 UPDATE session_metadata SET status = ?, end_time = ?, updated_at = ?
                 WHERE session_id = ?
-            """, (status, datetime.utcnow().isoformat(), self._current_session.updated_at, self._current_session.session_id))
+            """, (status, datetime.now(timezone.utc).isoformat(), self._current_session.updated_at, self._current_session.session_id))
             conn.commit()
         
         await self.evidence_manager.stop()
@@ -273,7 +273,7 @@ class SessionManager:
             return False
         
         self._current_session.status = SessionStatus.INTERRUPTED
-        self._current_session.updated_at = datetime.utcnow().isoformat()
+        self._current_session.updated_at = datetime.now(timezone.utc).isoformat()
         
         with self._get_conn() as conn:
             conn.execute("""
@@ -325,7 +325,7 @@ class SessionManager:
                 agents=json.loads(row["active_agents"] or "[]"),
                 config=config,
                 created_at=row["start_time"],
-                updated_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
                 recovery_data=recovery_state
             )
             
@@ -336,7 +336,7 @@ class SessionManager:
             with self._get_conn() as conn:
                 conn.execute("""
                     UPDATE session_metadata SET status = ?, updated_at = ? WHERE session_id = ?
-                """, (SessionStatus.RUNNING, datetime.utcnow().isoformat(), session_id))
+                """, (SessionStatus.RUNNING, datetime.now(timezone.utc).isoformat(), session_id))
                 conn.commit()
             
             await self.event_bus.publish_type(

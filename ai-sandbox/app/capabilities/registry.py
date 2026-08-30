@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 
@@ -55,7 +55,7 @@ class CapabilityRequest:
     objective: str
     context: str
     priority: str = "normal"
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     status: str = "pending"
 
 
@@ -157,7 +157,7 @@ class CapabilityRegistry:
     
     def _record_routing(self, request: CapabilityRequest, result: CapabilityResult) -> None:
         record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "request_id": request.request_id,
             "agent_id": request.agent_id,
             "capability": request.capability,
@@ -176,6 +176,27 @@ class CapabilityRegistry:
         if agent_id:
             history = [r for r in history if r.get("agent_id") == agent_id]
         return history[-limit:]
+    
+    def query_capabilities(self, intent: str) -> Dict[str, Any]:
+        """
+        Dynamically query available tools and models based on an intent string.
+        """
+        intent_lower = intent.lower()
+        matched_tools = []
+        for t in self._tools.values():
+            if any(c.lower() in intent_lower for c in t.capabilities) or t.name.lower() in intent_lower or any(word in t.description.lower() for word in intent_lower.split()):
+                matched_tools.append({"tool_id": t.tool_id, "name": t.name, "description": t.description})
+                
+        matched_models = []
+        for m in self._models.values():
+            if any(c.lower() in intent_lower for c in m.capabilities) or m.specialization.lower() in intent_lower:
+                matched_models.append({"model_id": m.model_id, "specialization": m.specialization})
+                
+        return {
+            "intent": intent,
+            "matched_tools": matched_tools,
+            "matched_models": matched_models
+        }
     
     def get_performance_stats(self, capability: Optional[str] = None) -> Dict[str, Any]:
         history = self._routing_history

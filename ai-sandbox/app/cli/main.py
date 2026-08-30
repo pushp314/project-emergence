@@ -826,5 +826,64 @@ async def _rollback(app: SandboxApp, mod_id: Optional[str]):
         console.print(f"[red]Rollback failed for {mod_id}[/red]")
 
 
+@cli.command()
+@click.argument('log_file', type=click.Path(exists=True))
+@click.option('--config', '-c', default='./config.yaml', help='Config file path')
+def autofix(log_file, config):
+    """Autonomously fix a crash based on a log file"""
+    asyncio.run(_autofix(log_file, config))
+
+async def _autofix(log_file: str, config_path: str):
+    console.print(f"[bold cyan]Auto-Fixer Initiated[/bold cyan] reading {log_file}")
+    with open(log_file, 'r') as f:
+        crash_log = f.read()
+
+    app = SandboxApp(config_path, start_paused=True)
+    await app.initialize()
+    cli_context.app = app
+    
+    app.conversation_engine.add_thinking_callback(_on_thinking)
+    
+    prompt = f"""CRITICAL SYSTEM CRASH DETECTED.
+The application just crashed with the following traceback:
+
+{crash_log}
+
+Your objective: Fix this bug immediately.
+1. Use your filesystem/terminal tools to read the file(s) mentioned in the traceback.
+2. Identify the root cause of the crash.
+3. Use the filesystem tool (write/append) or terminal tools to modify the broken file(s) and apply the fix.
+4. When you are absolutely certain the fix is applied to the codebase, reply with exactly the phrase "FIX_COMPLETE".
+
+DO NOT try to run or restart the application yourself. Just apply the code changes.
+"""
+    
+    await app.conversation_engine.inject_human_message(prompt)
+    await app.conversation_engine.resume()
+    
+    fix_completed = asyncio.Event()
+    
+    def check_fix(message):
+        _on_turn_display(message)
+        if "FIX_COMPLETE" in message.content:
+            console.print("[bold green]Agent reported fix complete![/bold green]")
+            fix_completed.set()
+            
+    app.conversation_engine.add_turn_callback(check_fix)
+    
+    run_task = asyncio.create_task(app.run())
+    
+    try:
+        await asyncio.wait_for(fix_completed.wait(), timeout=300)
+    except asyncio.TimeoutError:
+        console.print("[bold red]Auto-fixer timed out after 5 minutes.[/bold red]")
+    
+    await app.shutdown()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
+
+
 if __name__ == "__main__":
     cli()

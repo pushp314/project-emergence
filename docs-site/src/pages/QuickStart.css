@@ -1,0 +1,54 @@
+.steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.step-card {
+    display: flex;
+    gap: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    transition: var(--transition);
+}
+
+.step-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow);
+}
+
+.step-number {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    background: var(--gradient-1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
+}
+
+.step-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.step-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+@media (max-width: 600px) {
+    .step-card {
+        flex-direction: column;
+        gap: 16px;
+        padding: 24px;
+    }
+}

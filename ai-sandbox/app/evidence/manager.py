@@ -7,7 +7,7 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 
@@ -398,7 +398,12 @@ class EvidenceManager:
             metadata={"event_type": event.type.value, "event_id": event.event_id}
         )
     
-    def _save_evidence(self, evidence: Evidence) -> None:
+    
+    async def _save_evidence(self, evidence: Evidence) -> None:
+        import asyncio
+        await asyncio.to_thread(self._save_evidence_sync, evidence)
+
+    def _save_evidence_sync(self, evidence: Evidence) -> None:
         with self._get_conn() as conn:
             conn.execute("""
                 INSERT INTO evidence (evidence_id, session_id, agent_id, evidence_type, timestamp,
@@ -429,7 +434,7 @@ class EvidenceManager:
             action_details={"content_preview": content[:200], "turn": event.payload.get("turn_number")},
             tags=["communication", "intervention"] if is_intervention else ["communication"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_tool_request(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -441,7 +446,7 @@ class EvidenceManager:
             input_data=event.payload.get("arguments", {}),
             permission_required=event.payload.get("permission_required", False)
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_tool_started(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -451,7 +456,7 @@ class EvidenceManager:
             reason=f"Tool {event.payload.get('tool_name')} started",
             action_details={"tool": event.payload.get("tool_name")}
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_tool_completed(self, event: Event) -> None:
         result = event.payload.get("result")
@@ -464,7 +469,7 @@ class EvidenceManager:
             output_data={"success": True, "result": str(result)[:500] if result else None},
             tags=["success"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_tool_failed(self, event: Event) -> None:
         error = event.payload.get("error")
@@ -477,7 +482,7 @@ class EvidenceManager:
             output_data={"success": False, "error": error},
             tags=["failure"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_permission_request(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -490,7 +495,7 @@ class EvidenceManager:
             permission_id=event.payload.get("request_id"),
             tags=["permission", "pending"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_permission_approved(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -501,7 +506,7 @@ class EvidenceManager:
             permission_id=event.payload.get("request_id"),
             tags=["permission", "approved"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_permission_denied(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -512,7 +517,7 @@ class EvidenceManager:
             permission_id=event.payload.get("request_id"),
             tags=["permission", "denied"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_observer_intervention(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -523,7 +528,7 @@ class EvidenceManager:
             action_details={"topic": event.payload.get("topic")},
             tags=["observer", "intervention"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_resource_warning(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -534,7 +539,7 @@ class EvidenceManager:
             action_details=event.payload.get("metrics", {}),
             tags=["resource", "warning"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_resource_critical(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -545,7 +550,7 @@ class EvidenceManager:
             action_details=event.payload.get("metrics", {}),
             tags=["resource", "critical"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_human_interrupt(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -555,7 +560,7 @@ class EvidenceManager:
             reason="Human interrupted the conversation",
             tags=["human", "interrupt"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_human_message(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -566,7 +571,7 @@ class EvidenceManager:
             action_details={"content": event.payload.get("content", "")},
             tags=["human", "message"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_system_pause(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -576,7 +581,7 @@ class EvidenceManager:
             reason="System paused by user or resource manager",
             tags=["system", "pause"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_system_resume(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -586,7 +591,7 @@ class EvidenceManager:
             reason="System resumed from pause",
             tags=["system", "resume"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_system_stop(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -596,7 +601,7 @@ class EvidenceManager:
             reason="System stopped",
             tags=["system", "stop"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _handle_emergence_observed(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -607,7 +612,7 @@ class EvidenceManager:
             action_details=event.payload,
             tags=["emergence", "observation"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
 
     async def _handle_self_assessment(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -618,7 +623,7 @@ class EvidenceManager:
             action_details=event.payload,
             tags=["emergence", "self_assessment"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
 
     async def _handle_role_change(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -629,7 +634,7 @@ class EvidenceManager:
             action_details=event.payload,
             tags=["emergence", "role_change"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
 
     async def _handle_disagreement(self, event: Event) -> None:
         evidence = self._create_evidence(
@@ -640,9 +645,13 @@ class EvidenceManager:
             action_details=event.payload,
             tags=["emergence", "disagreement", "conflict"]
         )
-        self._save_evidence(evidence)
+        await self._save_evidence(evidence)
     
     async def _create_session_record(self, session_id: str) -> None:
+        import asyncio
+        await asyncio.to_thread(self._create_session_record_sync, session_id)
+
+    def _create_session_record_sync(self, session_id: str) -> None:
         import subprocess
         try:
             git_commit = subprocess.check_output(
@@ -659,16 +668,20 @@ class EvidenceManager:
                                                 environment_metadata, recovery_state)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                session_id, 0, "RUNNING", datetime.utcnow().isoformat(),
+                session_id, 0, "RUNNING", datetime.now(timezone.utc).isoformat(),
                 "{}", "{}", git_commit, "{}", "{}"
             ))
             conn.commit()
     
     async def _complete_session_record(self, session_id: str) -> None:
+        import asyncio
+        await asyncio.to_thread(self._complete_session_record_sync, session_id)
+
+    def _complete_session_record_sync(self, session_id: str) -> None:
         with self._get_conn() as conn:
             conn.execute("""
                 UPDATE sessions SET status = ?, end_time = ? WHERE session_id = ?
-            """, ("COMPLETED", datetime.utcnow().isoformat(), session_id))
+            """, ("COMPLETED", datetime.now(timezone.utc).isoformat(), session_id))
             conn.commit()
     
     def record_resource_metrics(self, metrics: Dict[str, Any]) -> None:
@@ -683,7 +696,7 @@ class EvidenceManager:
                                              active_model, queue_depth)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                self._session_id, datetime.utcnow().isoformat(),
+                self._session_id, datetime.now(timezone.utc).isoformat(),
                 metrics.get("ram_used_gb"), metrics.get("ram_total_gb"),
                 metrics.get("cpu_percent"), metrics.get("gpu_percent"),
                 metrics.get("inference_latency_ms"), metrics.get("tokens_per_second"),
@@ -893,7 +906,7 @@ class EvidenceManager:
         backup_path_obj = Path(backup_dir)
         backup_path_obj.mkdir(parents=True, exist_ok=True)
         
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         backup_file = backup_path_obj / f"sandbox_{timestamp}.db"
         
         try:

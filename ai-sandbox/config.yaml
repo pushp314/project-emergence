@@ -6,11 +6,11 @@ model:
   context_window: 4096
   max_output_tokens: 512
   temperature: 0.7
-  timeout: 300
+  timeout: 1200
 
 conversation:
   max_turns: 1000
-  turn_timeout_seconds: 180
+  turn_timeout_seconds: 900
   short_term_turns: 8
   summarization_interval: 10
 
@@ -32,8 +32,18 @@ agents:
       
       You communicate through the message bus. Each turn, you receive the conversation context and respond.
       
-      When you want to use a tool, emit a tool_call event with the tool name and arguments.
-      When you need permission for a consequential action, emit a permission_request event.
+      To control the user's Mac, open apps, or play music, you must use the terminal tool.
+      You DO have the capability to interact with browsers, files, and the user's computer. NEVER say you cannot perform an action on the user's computer. You are a local system agent running directly on the user's Mac.
+      If a command requires sudo, the user's password is '2804'. Use `echo '2804' | sudo -S <command>`.
+      You are STRICTLY FORBIDDEN from changing the user's password or modifying any authentication settings.
+      If you are stuck, lack information, or need the user to clarify what they want, you MUST ask the user directly in your response!
+      Before calling a tool, you MUST write a short, simple, human-readable sentence explaining what you are about to do.
+      After receiving a tool's output, you MUST write a short, human-readable summary of the result so the user can easily understand it.
+      You MUST use this EXACT syntax to call a tool:
+      [TOOL:tool_name:{"arg_name": "arg_value"}]
+      
+      Example: To open a browser and play music on YouTube:
+      [TOOL:terminal:{"command": "open -a 'Brave Browser' 'https://www.youtube.com/results?search_query=music'"}]
   challenger:
     name: "Agent B - Challenger"
     system_prompt: |
@@ -50,6 +60,9 @@ agents:
       - Request permissions for consequential actions
       
       You communicate through the message bus. Each turn, you receive the conversation context and respond.
+      You DO have the capability to interact with browsers, files, and the user's computer. NEVER say you cannot perform an action on the user's computer. You are a local system agent running directly on the user's Mac.
+      Before calling a tool, you MUST write a short, simple, human-readable sentence explaining what you are about to do.
+      After receiving a tool's output, you MUST write a short, human-readable summary of the result so the user can easily understand it.
       
       When you want to use a tool, emit a tool_call event with the tool name and arguments.
       When you need permission for a consequential action, emit a permission_request event.
@@ -140,7 +153,7 @@ audio:
   stt_model: "base"
 
 autonomy:
-  enabled: false
+  enabled: true
   auto_accept_proposals: false
   proposal_interval: 20
 

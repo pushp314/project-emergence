@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -46,7 +46,7 @@ class ReportGenerator:
                 "session_info": session_info,
                 "timeline": timeline,
                 "evidence_count": len(session_evidence),
-                "generated_at": datetime.utcnow().isoformat()
+                "generated_at": datetime.now(timezone.utc).isoformat()
             }, f, indent=2)
         
         logger.info(f"Final report generated for session {session_id}: {report_path}")
@@ -208,7 +208,7 @@ The agents conducted research, made decisions, and explored topics through struc
 
 ---
 
-*Report generated at {datetime.utcnow().isoformat()}*
+*Report generated at {datetime.now(timezone.utc).isoformat()}*
 """
         return report
     
@@ -236,7 +236,7 @@ The agents conducted research, made decisions, and explored topics through struc
             "session_info": session_info,
             "timeline": timeline,
             "evidence": evidence,
-            "exported_at": datetime.utcnow().isoformat()
+            "exported_at": datetime.now(timezone.utc).isoformat()
         }
         
         if format == "json":

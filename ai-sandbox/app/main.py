@@ -21,7 +21,8 @@ from app.orchestration.conversation import ConversationEngine, ConversationConfi
 from app.orchestration.scheduler import create_scheduler
 from app.audio import TTSConfig, STTConfig, create_tts_adapter, create_stt_adapter
 from app.memory import SQLiteStore, MemorySummarizer, MemoryManager, ContextManager
-from app.tools import ToolGateway, TerminalTool, FilesystemTool, WebTool, set_tool_gateway
+from app.tools import ToolGateway, TerminalTool, FilesystemTool, WebTool, TestingTool, KnowledgeTool, SystemTool, set_tool_gateway
+from app.memory.vector_store import VectorMemoryStore
 from app.permissions import PermissionManager
 from app.resources import ResourceManager, ResourceThresholds, ResourceLevel
 from app.autonomy import AutonomousEnvironment
@@ -69,7 +70,7 @@ class SandboxApp:
         logger.info("Initializing AI Sandbox...")
         
         model_config = self.config.get("model", {})
-        host = model_config.get("host", "http://localhost:11434")
+        host = model_config.get("host", "http://127.0.0.1:11434")
         default_model = model_config.get("default", "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M")
         
         adapter = await create_ollama_adapter(
@@ -223,37 +224,80 @@ class SandboxApp:
             )
             self.tool_gateway.register(fs)
         
+        if tools_config.get("testing", {}).get("enabled", True):
+            testing = TestingTool(
+                timeout=tools_config.get("testing", {}).get("timeout", 60)
+            )
+            self.tool_gateway.register(testing)
+            
+        vector_store = VectorMemoryStore(str(Path(db_path).parent))
+        knowledge_tool = KnowledgeTool(vector_store)
+        self.tool_gateway.register(knowledge_tool)
+        
+        system_tool = SystemTool()
+        self.tool_gateway.register(system_tool)
+        
+        from app.tools.vision import ScreenshotTool
+        vision_tool = ScreenshotTool()
+        self.tool_gateway.register(vision_tool)
+        
+        from app.tools.dynamic_creator import CreateToolTool
+        dynamic_tool = CreateToolTool()
+        self.tool_gateway.register(dynamic_tool)
+        
+        from app.tools.orchestration import DelegateTaskTool
+        delegate_tool = DelegateTaskTool()
+        self.tool_gateway.register(delegate_tool)
+        
         if tools_config.get("web", {}).get("enabled", True):
             web = WebTool(
                 timeout=tools_config.get("web", {}).get("timeout", 30),
-                max_response_size=tools_config.get("web", {}).get("max_response_size", 1024 * 1024),
                 allowed_domains=tools_config.get("web", {}).get("allowed_domains"),
                 blocked_domains=tools_config.get("web", {}).get("blocked_domains")
             )
             self.tool_gateway.register(web)
         
         async def permission_checker(agent_id: str, perm: PermissionLevel, risk: RiskLevel) -> bool:
-            if risk == RiskLevel.LOW:
-                return True
-            
-            return await self.permission_manager.request_permission(
-                agent_id=agent_id,
-                action=f"Use tool requiring {perm.value}",
-                command=f"Tool permission: {perm.value} / {risk.value}",
-                reason=f"Tool requires {perm.value} permission with {risk.value} risk",
-                risk=risk,
-                scope=perm
-            )
+            if risk in (RiskLevel.HIGH, RiskLevel.CRITICAL) or perm == PermissionLevel.SYSTEM:
+                future = asyncio.get_event_loop().create_future()
+                req_id = str(uuid.uuid4())
+                
+                if not hasattr(self, 'permission_futures'):
+                    self.permission_futures = {}
+                self.permission_futures[req_id] = future
+                
+                await self.event_bus.publish_type(
+                    EventType.PERMISSION_REQUEST,
+                    agent_id,
+                    {
+                        "request_id": req_id,
+                        "permission": perm.value,
+                        "risk": risk.value
+                    }
+                )
+                
+                try:
+                    return await asyncio.wait_for(future, timeout=300.0)
+                except asyncio.TimeoutError:
+                    return False
+            return True
         
         self.tool_gateway.set_permission_checker(permission_checker)
         
         agent_a = create_explorer_agent("agent_a", default_model)
+        agent_a.config.agent_identity = "manager"
+        agent_a.config.name = "Manager CEO"
+        agent_a.config.system_prompt = """You are the Manager Agent (CEO).
+Your primary role is to break down complex tasks and delegate them to sub-agents.
+DO NOT execute terminal, filesystem, or web tools yourself. 
+You MUST use the `delegate_task` tool to spawn specialized worker agents (e.g., 'Python Developer', 'QA Tester', 'Web Scraper').
+When the user gives you an objective, figure out what sub-tasks are needed, delegate them sequentially using `delegate_task`, and then aggregate the results to present the final answer to the user.
+"""
         agent_b = create_challenger_agent("agent_b", default_model)
         agent_c = create_observer_agent("agent_c", observer_model)
         
         agents = {
             "agent_a": agent_a,
-            "agent_b": agent_b,
         }
         
         conv_config = self.config.get("conversation", {})
@@ -262,6 +306,7 @@ class SandboxApp:
             max_turns=conv_config.get("max_turns", 1000),
             turn_timeout_seconds=conv_config.get("turn_timeout_seconds", 120),
             short_term_turns=conv_config.get("short_term_turns", 8),
+            autonomy_enabled=self.config.get("autonomy", {}).get("enabled", False),
             initial_speaker=conv_config.get("initial_speaker", "agent_a"),
             scheduler_policy=conv_config.get("scheduler_policy", "round_robin")
         )

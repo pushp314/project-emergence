@@ -1,0 +1,44 @@
+.api-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.method-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 20px 24px;
+    transition: var(--transition);
+}
+
+.method-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow);
+}
+
+.method-signature {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.method-name {
+    font-weight: 600;
+    color: var(--accent-light);
+    font-size: 0.95rem;
+}
+
+.method-params {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.method-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}

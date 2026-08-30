@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.evidence.manager import get_evidence_manager
@@ -36,7 +36,7 @@ class DecisionManager:
             evidence_considered=evidence_considered or [],
             alternatives=alternatives or [],
             resulting_action=resulting_action,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             metadata=metadata or {}
         )
         

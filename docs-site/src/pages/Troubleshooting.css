@@ -1,0 +1,93 @@
+.issue-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin-top: 24px;
+    transition: var(--transition);
+}
+
+.issue-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow);
+}
+
+.issue-symptom {
+    margin-bottom: 24px;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.issue-label,
+.solution-label {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.issue-label {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+}
+
+.solution-label {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.solution-note {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-top: 12px;
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+}
+
+.error-table-wrapper {
+    overflow-x: auto;
+    margin-top: 24px;
+}
+
+.error-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.error-table th {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 16px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.error-table td {
+    padding: 16px 20px;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.error-table tr:last-child td {
+    border-bottom: none;
+}
+
+.error-table tr:hover td {
+    background: var(--bg-card-hover);
+}

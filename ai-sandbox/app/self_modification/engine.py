@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 
@@ -53,7 +53,7 @@ CORE_SAFETY_FILES = [
 
 @dataclass
 class BenchmarkResult:
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     ram_mb: float = 0.0
     cpu_percent: float = 0.0
     inference_latency_ms: float = 0.0
@@ -66,7 +66,7 @@ class BenchmarkResult:
 
 @dataclass
 class TestResult:
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     passed: int = 0
     failed: int = 0
     skipped: int = 0
@@ -123,7 +123,7 @@ class SelfModificationEngine:
         metrics: List[str]
     ) -> ModificationRecord:
         async with self._modification_lock:
-            if self._cooldown_until and datetime.utcnow() < self._cooldown_until:
+            if self._cooldown_until and datetime.now(timezone.utc) < self._cooldown_until:
                 raise RuntimeError(f"Modification cooldown active until {self._cooldown_until}")
             
             if len(self._active_modifications) >= self.max_concurrent:
@@ -363,12 +363,12 @@ class SelfModificationEngine:
     async def _apply_to_main(self, modification: ModificationRecord) -> None:
         modification.status = ModificationStatus.APPLIED
         modification.applied_commit = await self._get_current_commit()
-        modification.completed_at = datetime.utcnow().isoformat()
+        modification.completed_at = datetime.now(timezone.utc).isoformat()
         self.evidence_manager.record_modification(modification)
         
         await self._cleanup_worktree(modification)
         
-        self._cooldown_until = datetime.utcnow().replace(second=0, microsecond=0)
+        self._cooldown_until = datetime.now(timezone.utc).replace(second=0, microsecond=0)
         self._cooldown_until = self._cooldown_until.replace(minute=self._cooldown_until.minute + 10)
         
         self._active_modifications.pop(modification.modification_id, None)
@@ -399,7 +399,7 @@ class SelfModificationEngine:
             
             modification.status = ModificationStatus.ROLLED_BACK
             modification.rollback_commit = await self._get_current_commit()
-            modification.completed_at = datetime.utcnow().isoformat()
+            modification.completed_at = datetime.now(timezone.utc).isoformat()
             self.evidence_manager.record_modification(modification)
             
             await self._cleanup_worktree(modification)

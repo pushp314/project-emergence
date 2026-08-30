@@ -6,7 +6,7 @@ import platform
 import psutil
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 
@@ -31,7 +31,7 @@ class ResourceMetrics:
     generation_latency_ms: float = 0.0
     active_model: str = ""
     queue_length: int = 0
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     
     @property
     def ram_available_gb(self) -> float:
@@ -159,7 +159,7 @@ class ResourceManager:
                 level=new_level,
                 metrics=metrics,
                 warnings=warnings,
-                last_check=datetime.utcnow().isoformat()
+                last_check=datetime.now(timezone.utc).isoformat()
             )
             
             if new_level != old_level:
