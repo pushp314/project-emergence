@@ -22,9 +22,20 @@ class GeminiAdapter(ModelAdapter):
         contents = []
         for m in (request.messages or []):
             role = "model" if m["role"] == "assistant" else "user"
-            contents.append({"role": role, "parts": [{"text": m["content"]}]})
-        if request.prompt:
-            contents.append({"role": "user", "parts": [{"text": request.prompt}]})
+            parts = [{"text": m["content"]}]
+            if "images" in m:
+                for img_b64 in m["images"]:
+                    parts.append({"inlineData": {"mimeType": "image/png", "data": img_b64}})
+            contents.append({"role": role, "parts": parts})
+            
+        if request.prompt or request.images:
+            parts = []
+            if request.prompt:
+                parts.append({"text": request.prompt})
+            if request.images:
+                for img_b64 in request.images:
+                    parts.append({"inlineData": {"mimeType": "image/png", "data": img_b64}})
+            contents.append({"role": "user", "parts": parts})
         body = {
             "contents": contents,
             "generationConfig": {

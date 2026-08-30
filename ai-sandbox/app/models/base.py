@@ -19,6 +19,7 @@ class GenerationRequest:
     prompt: str = ""
     system_prompt: Optional[str] = None
     messages: Optional[List[Dict[str, Any]]] = None
+    images: Optional[List[str]] = None
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
     stream: bool = True
