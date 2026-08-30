@@ -235,6 +235,24 @@ class ContextManager:
                 }
             )
 
+            # Phase 4/5: Background indexing into Vector Store
+            if self.vector_store:
+                # Index the overall summary
+                summary_content = f"Conversation Summary (Turns {summary.turn_start}-{summary.turn_end}):\\nTopic: {summary.topic}\\nSummary: {summary.content}"
+                await self.vector_store.add_memory_async(
+                    memory_id=f"summary_{summary.id}",
+                    content=summary_content,
+                    metadata={"conversation_id": self.state.conversation_id, "type": "conversation_summary"}
+                )
+                
+                # Index individual important facts
+                for idx, fact in enumerate(summary.important_facts):
+                    await self.vector_store.add_memory_async(
+                        memory_id=f"fact_{summary.id}_{idx}",
+                        content=f"Important Fact: {fact}",
+                        metadata={"conversation_id": self.state.conversation_id, "type": "fact"}
+                    )
+
             logger.info(f"Context summarized at turn {current_turn}: topic={summary.topic}")
 
     async def get_context_for_llm(self, resource_state: str = "GREEN") -> Dict[str, Any]:

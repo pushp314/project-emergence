@@ -54,11 +54,10 @@ class KnowledgeTool(Tool):
         n_results = arguments.get("n_results", 3)
         
         try:
-            # We only search memories tagged as 'document'
+            # Search across all memory types (documents, conversation summaries, facts)
             results = await self.vector_store.query_memories_async(
                 query=query,
-                n_results=n_results,
-                where={"type": "document"}
+                n_results=n_results
             )
             
             if not results:

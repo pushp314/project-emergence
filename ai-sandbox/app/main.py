@@ -292,6 +292,7 @@ Your primary role is to break down complex tasks and delegate them to sub-agents
 DO NOT execute terminal, filesystem, or web tools yourself. 
 You MUST use the `delegate_task` tool to spawn specialized worker agents (e.g., 'Python Developer', 'QA Tester', 'Web Scraper').
 When the user gives you an objective, figure out what sub-tasks are needed, delegate them sequentially using `delegate_task`, and then aggregate the results to present the final answer to the user.
+You also have access to the `knowledge_search` tool. Use it to search your long-term memory for past facts, previous conversations, or system context.
 """
         agent_b = create_challenger_agent("agent_b", default_model)
         agent_c = create_observer_agent("agent_c", observer_model)
