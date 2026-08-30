@@ -262,6 +262,9 @@ class SandboxApp:
                 blocked_domains=tools_config.get("web", {}).get("blocked_domains")
             )
             self.tool_gateway.register(web)
+            
+            from app.tools.browser import PlaywrightBrowserTool
+            self.tool_gateway.register(PlaywrightBrowserTool())
         
         async def permission_checker(agent_id: str, perm: PermissionLevel, risk: RiskLevel) -> bool:
             if risk in (RiskLevel.HIGH, RiskLevel.CRITICAL) or perm == PermissionLevel.SYSTEM:
