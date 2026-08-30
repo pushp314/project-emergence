@@ -9,10 +9,12 @@ model:
       provider: gemini
       name: "gemini-2.5-flash"
       context_window: 1000000
+      fallback: default
     critical_review:
       provider: gemini
       name: "gemini-2.5-pro"
       context_window: 1000000
+      fallback: default
     observer:
       provider: mlx
       name: "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit"

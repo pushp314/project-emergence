@@ -92,6 +92,19 @@ class SandboxApp:
             if asyncio.iscoroutine(adapter):
                 adapter = await adapter
             self.model_registry.register(role_name, adapter, is_default=(role_name == "default"))
+            
+        from app.models.fallback import FallbackAdapter
+        for role_name, route in routes.items():
+            fallback_name = route.get("fallback")
+            if fallback_name:
+                primary = self.model_registry.get(role_name)
+                try:
+                    fallback = self.model_registry.get(fallback_name)
+                    fallback_adapter = FallbackAdapter(primary, fallback)
+                    self.model_registry.register(role_name, fallback_adapter, is_default=(role_name == "default"))
+                    logger.info(f"Registered fallback for {role_name}: {fallback_name}")
+                except Exception as e:
+                    logger.error(f"Failed to setup fallback for {role_name}: {e}")
         
         logger.info("Models initialized")
         
