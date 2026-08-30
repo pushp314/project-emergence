@@ -1,3 +1,4 @@
+# STATUS: scaffold only, not yet wired into main.py's conversation loop or any orchestration path. See <ticket/brief ref> for integration work.
 import logging
 from enum import Enum
 from dataclasses import dataclass, field

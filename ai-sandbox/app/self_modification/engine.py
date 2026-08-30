@@ -22,6 +22,8 @@ from app.evidence.schemas import ModificationRecord, Evidence, EvidenceType
 logger = logging.getLogger(__name__)
 
 
+BENCHMARK_PROBE_PROMPT = "Explain the importance of code modularity in one paragraph."
+
 class ModificationStatus(str):
     PROPOSED = "proposed"
     BASELINE = "baseline"
@@ -183,6 +185,28 @@ class SelfModificationEngine:
         return modification
     
     async def _request_human_approval(self, modification: ModificationRecord) -> None:
+        try:
+            from app.models.base import get_model_registry, GenerationRequest
+            critical_model = get_model_registry().get("critical_review")
+            
+            review_prompt = f"""You are a critical safety reviewer.
+Assess the risk of this proposed self-modification.
+
+Proposal: {modification.proposal}
+Reason: {modification.reason}
+Hypothesis: {modification.hypothesis}
+Expected Risk: {modification.expected_risk}
+Files Affected: {', '.join(modification.files_affected)}
+
+Please produce a structured risk assessment summary."""
+            
+            req = GenerationRequest(prompt=review_prompt)
+            resp = await critical_model.generate(req)
+            modification.metadata["critical_review_assessment"] = resp.text
+        except Exception as e:
+            logger.error(f"Critical review model failed: {e}")
+            modification.metadata["critical_review_assessment"] = f"Review failed: {e}"
+            
         modification.status = ModificationStatus.PENDING_APPROVAL
         self.evidence_manager.record_modification(modification)
         
@@ -194,7 +218,7 @@ class SelfModificationEngine:
             evidence_type=EvidenceType.MODIFICATION_PROPOSED,
             intent="Human approval requested",
             reason=f"Critical modification {modification.modification_id} requires human approval",
-            action_details={"modification_id": modification.modification_id},
+            action_details={"modification_id": modification.modification_id, "assessment": modification.metadata.get("critical_review_assessment", "")},
             tags=["self-modification", "approval_required"]
         )
         self.evidence_manager._save_evidence(evidence)
@@ -242,6 +266,10 @@ class SelfModificationEngine:
         self._worktrees[modification.modification_id] = worktree_path
         
         try:
+            benchmark_before = await self._run_benchmark(modification, worktree_path, "before")
+            modification.benchmark_before = benchmark_before.__dict__
+            self.evidence_manager.record_modification(modification)
+            
             await self._apply_changes(modification, worktree_path)
             
             modification.status = ModificationStatus.TESTING
@@ -258,10 +286,6 @@ class SelfModificationEngine:
                 return
             
             modification.status = ModificationStatus.BENCHMARKING
-            self.evidence_manager.record_modification(modification)
-            
-            benchmark_before = await self._run_benchmark(modification, worktree_path, "before")
-            modification.benchmark_before = benchmark_before.__dict__
             self.evidence_manager.record_modification(modification)
             
             benchmark_after = await self._run_benchmark(modification, worktree_path, "after")
@@ -308,9 +332,10 @@ class SelfModificationEngine:
         return worktree_path
     
     async def _apply_changes(self, modification: ModificationRecord, worktree_path: Path) -> None:
+        from app.models.base import get_model_registry, GenerationRequest
         planning_model = get_model_registry().get("planning")
         
-        # Read the current content of the affected files
+        # Read the current content of the affected files from the worktree
         file_contents = ""
         for file_path in modification.files_affected:
             full_path = worktree_path / file_path
@@ -320,16 +345,20 @@ class SelfModificationEngine:
             else:
                 file_contents += f"\n--- {file_path} ---\n(New File)\n"
 
-        # Ask the model to write the diff
         prompt = f"""You are an expert software engineer generating a diff to apply a self-modification.
 The user's high-level intent is:
 {modification.proposal}
+Reason: {modification.reason}
+Hypothesis: {modification.hypothesis}
+Expected Benefit: {modification.expected_benefit}
+Expected Risk: {modification.expected_risk}
 
 Here are the current contents of the affected files:
 {file_contents}
 
 Please output a valid, unified `git` diff (patch) that implements this modification.
 ONLY output the raw diff, do not add any conversational text.
+ONLY modify the files listed above. Do not modify any other files.
 If you use markdown code blocks, wrap the diff in ```diff ... ```.
 """
         req = GenerationRequest(
@@ -337,25 +366,44 @@ If you use markdown code blocks, wrap the diff in ```diff ... ```.
             system_prompt="You generate strictly formatted git unified diff patches.",
             temperature=0.2
         )
-        response = await planning_model.generate(req)
         
-        # Extract diff block
+        try:
+            response = await planning_model.generate(req)
+        except Exception as e:
+            modification.metadata["apply_error"] = f"Model generation failed: {str(e)}"
+            raise RuntimeError(f"Model generation failed: {str(e)}")
+            
         diff_text = response.text
-        match = re.search(r"```diff\n(.*?)```", diff_text, re.DOTALL)
+        if not diff_text.strip():
+            modification.metadata["apply_error"] = "Model returned empty diff."
+            raise RuntimeError("Model returned empty diff.")
+            
+        # Extract diff block
+        import re
+        match = re.search(r"```(?:diff)?\n(.*?)```", diff_text, re.DOTALL)
         if match:
             diff_text = match.group(1).strip()
         else:
-            # Maybe standard code block
-            match = re.search(r"```\n(.*?)```", diff_text, re.DOTALL)
-            if match:
-                diff_text = match.group(1).strip()
-            else:
-                diff_text = diff_text.strip()
-        
-        patch_file = worktree_path / "modification.patch"
+            diff_text = diff_text.strip()
+            
+        patch_file = worktree_path / ".self-mod-patch.diff"
         with open(patch_file, "w") as f:
             f.write(diff_text + "\n")
             
+        # First, dry run the apply
+        try:
+            subprocess.run(
+                ["git", "apply", "--check", "--ignore-whitespace", str(patch_file)],
+                cwd=worktree_path,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+        except subprocess.CalledProcessError as e:
+            modification.metadata["apply_error"] = f"Patch validation failed: {e.stderr}"
+            raise RuntimeError(f"Patch validation failed: {e.stderr}")
+            
+        # If dry run succeeds, actually apply the patch
         try:
             subprocess.run(
                 ["git", "apply", "--ignore-whitespace", str(patch_file)],
@@ -365,16 +413,12 @@ If you use markdown code blocks, wrap the diff in ```diff ... ```.
                 text=True
             )
         except subprocess.CalledProcessError as e:
-            # Fallback to execute as bash script if patch fails
-            script_file = worktree_path / "apply.sh"
-            with open(script_file, "w") as f:
-                f.write(modification.proposal)
-            os.chmod(script_file, 0o755)
-            try:
-                subprocess.run(["/bin/bash", str(script_file)], cwd=worktree_path, check=True)
-            except subprocess.CalledProcessError as e2:
-                logger.error(f"Failed to apply modification patch or script: {e.stderr} | {e2}")
-                raise
+            modification.metadata["apply_error"] = f"Patch application failed: {e.stderr}"
+            raise RuntimeError(f"Patch application failed: {e.stderr}")
+        finally:
+            # Clean up the patch file
+            if patch_file.exists():
+                patch_file.unlink()
     
     async def _run_tests(self, modification: ModificationRecord, worktree_path: Path) -> TestResult:
         start_time = time.time()
@@ -402,24 +446,55 @@ If you use markdown code blocks, wrap the diff in ```diff ... ```.
             return TestResult(failed=1, test_details=[{"error": str(e)}])
     
     async def _run_benchmark(self, modification: ModificationRecord, worktree_path: Path, phase: str) -> BenchmarkResult:
-        start_time = time.time()
-        process = psutil.Process()
-        ram_mb = process.memory_info().rss / (1024 * 1024)
-        cpu = process.cpu_percent(interval=1.0)
+        from app.models.base import get_model_registry, GenerationRequest
+        model = get_model_registry().get("default")
         
-        latency = 150.0 + (50.0 if phase == "before" else 0.0)
+        # CPU and Memory
+        # Note: This measures the self-modification engine's own process, 
+        # not the modified worktree code running standalone.
+        import psutil
+        process = psutil.Process()
+        cpu_percent = process.cpu_percent(interval=0.5)
+        ram_mb = process.memory_info().rss / (1024 * 1024)
+        
+        # Inference Latency and Tokens
+        start_time = time.time()
+        try:
+            req = GenerationRequest(prompt=BENCHMARK_PROBE_PROMPT, max_tokens=10)
+            resp = await model.generate(req)
+            latency_ms = (time.time() - start_time) * 1000
+            tokens_gen = resp.tokens_generated
+            tokens_per_second = tokens_gen / (latency_ms / 1000) if latency_ms > 0 else 0.0
+            error_rate = 0.0
+        except Exception as e:
+            logger.error(f"Benchmark inference failed: {e}")
+            latency_ms = float('inf')
+            tokens_per_second = 0.0
+            error_rate = 1.0
+            
+        try:
+            context_tokens = await model.count_tokens(BENCHMARK_PROBE_PROMPT)
+        except Exception:
+            context_tokens = 0
         
         return BenchmarkResult(
             timestamp=datetime.now(timezone.utc).isoformat(),
             ram_mb=ram_mb,
-            cpu_percent=cpu,
-            inference_latency_ms=latency,
-            test_passed=True
+            cpu_percent=cpu_percent,
+            inference_latency_ms=latency_ms,
+            tokens_per_second=tokens_per_second,
+            context_tokens=context_tokens,
+            test_passed=True,
+            error_rate=0.0
         )
     
     def _evaluate_modification(self, modification: ModificationRecord) -> Dict[str, Any]:
         before = modification.benchmark_before
         after = modification.benchmark_after
+        
+        logger.info(f"Evaluating modification {modification.modification_id}")
+        logger.info(f"Before: Latency={before.get('inference_latency_ms', 0):.2f}ms, RAM={before.get('ram_mb', 0):.2f}MB")
+        logger.info(f"After:  Latency={after.get('inference_latency_ms', 0):.2f}ms, RAM={after.get('ram_mb', 0):.2f}MB")
         
         improvements = 0
         regressions = 0
@@ -435,6 +510,8 @@ If you use markdown code blocks, wrap the diff in ```diff ... ```.
             regressions += 1
         
         should_apply = improvements > regressions and modification.test_results.get("failed", 1) == 0
+        
+        logger.info(f"Evaluation: Improvements={improvements}, Regressions={regressions}, Should Apply={should_apply}")
         
         return {
             "should_apply": should_apply,
