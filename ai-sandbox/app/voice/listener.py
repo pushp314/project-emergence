@@ -26,10 +26,16 @@ class ContinuousVoiceListener:
         self.CHUNK_DURATION_MS = 30  # WebRTC VAD needs 10, 20, or 30 ms chunks
         self.CHUNK_SIZE = int(self.RATE * self.CHUNK_DURATION_MS / 1000)  # 480 frames
         
-        self.vad = webrtcvad.Vad(3)  # Aggressiveness mode from 0 to 3 (3 is most aggressive)
+        if webrtcvad:
+            self.vad = webrtcvad.Vad(3)  # Aggressiveness mode from 0 to 3 (3 is most aggressive)
+        else:
+            self.vad = None
+            logger.warning("webrtcvad not installed. Voice listening is disabled.")
         
     def start(self):
-        if self.is_listening:
+        if self.is_listening or not self.vad:
+            if not self.vad:
+                logger.error("Cannot start voice listener: webrtcvad module is missing.")
             return
         self.is_listening = True
         logger.info(f"Started Continuous Voice Listener. Wake word: '{self.wake_word}'")
