@@ -26,7 +26,7 @@ class FilesystemTool(Tool):
             ".txt", ".md", ".py", ".js", ".ts", ".json", ".yaml", ".yml",
             ".html", ".css", ".sql", ".sh", ".csv", ".log", ".xml", ".toml"
         ]
-        self._blocked_paths = blocked_paths or [
+        self._blocked_paths = blocked_paths if blocked_paths is not None else [
             "/etc", "/var", "/usr", "/bin", "/sbin", "/boot", "/sys", "/proc",
             "/root", "/home/*/.ssh", "/home/*/.gnupg"
         ]
@@ -90,22 +90,12 @@ class FilesystemTool(Tool):
         except ValueError:
             raise PermissionError(f"Path '{path}' is outside base directory")
         
-        # Blocked paths check - only for paths outside base directory (already validated above)
-        # This is a safety net for edge cases where symlinks might escape
+        # Blocked paths check - applies to ALL paths, even those inside base_path
         for blocked in self._blocked_paths:
             try:
                 blocked_resolved = pathlib.Path(blocked).resolve()
-                # Only block if the target is NOT under base path but IS under blocked path
-                # (this handles symlink escape attempts)
-                if target != self._base_path and target.is_relative_to(blocked_resolved):
-                    # Double-check: is target actually outside base path?
-                    try:
-                        target.relative_to(self._base_path)
-                        # If we get here, target IS under base path, so it's OK
-                        pass
-                    except ValueError:
-                        # Target is outside base path AND under blocked path - deny
-                        raise PermissionError(f"Path '{path}' is in blocked directory: {blocked}")
+                if target.is_relative_to(blocked_resolved):
+                    raise PermissionError(f"Path '{path}' is in blocked directory: {blocked}")
             except ValueError:
                 pass
         

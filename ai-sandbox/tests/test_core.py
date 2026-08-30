@@ -359,15 +359,14 @@ class TestTools:
     @pytest.mark.asyncio
     async def test_filesystem_tool(self, tmp_path):
         from app.tools.filesystem import FilesystemTool
-        
-        tool = FilesystemTool(base_path=str(tmp_path))
-        
+        tool = FilesystemTool(base_path=str(tmp_path), blocked_paths=[])
         # Write file
         result = await tool.execute({
             "operation": "write",
             "path": "test.txt",
             "content": "Hello world"
         })
+        print(f"\nRESULT: {result}")
         assert result["success"] is True
         
         # Read file
@@ -389,8 +388,7 @@ class TestTools:
         from app.tools.filesystem import FilesystemTool
         import os
         
-        tool = FilesystemTool(base_path=str(tmp_path))
-        
+        tool = FilesystemTool(base_path=str(tmp_path), blocked_paths=[])
         # Create a file outside the base path
         outside_file = tmp_path.parent / "outside.txt"
         outside_file.write_text("secret")

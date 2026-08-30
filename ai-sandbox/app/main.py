@@ -265,27 +265,14 @@ class SandboxApp:
         
         async def permission_checker(agent_id: str, perm: PermissionLevel, risk: RiskLevel) -> bool:
             if risk in (RiskLevel.HIGH, RiskLevel.CRITICAL) or perm == PermissionLevel.SYSTEM:
-                future = asyncio.get_event_loop().create_future()
-                req_id = str(uuid.uuid4())
-                
-                if not hasattr(self, 'permission_futures'):
-                    self.permission_futures = {}
-                self.permission_futures[req_id] = future
-                
-                await self.event_bus.publish_type(
-                    EventType.PERMISSION_REQUEST,
-                    agent_id,
-                    {
-                        "request_id": req_id,
-                        "permission": perm.value,
-                        "risk": risk.value
-                    }
+                return await self.permission_manager.request_permission(
+                    agent_id=agent_id,
+                    action="execute_tool",
+                    command=f"Tool with {perm.value} scope",
+                    reason=f"High risk tool execution ({risk.value})",
+                    risk=risk,
+                    scope=perm
                 )
-                
-                try:
-                    return await asyncio.wait_for(future, timeout=300.0)
-                except asyncio.TimeoutError:
-                    return False
             return True
         
         self.tool_gateway.set_permission_checker(permission_checker)
