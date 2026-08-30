@@ -20,6 +20,7 @@ from app.agents.explorer import create_explorer_agent
 from app.agents.observer import create_observer_agent
 from app.orchestration.conversation import ConversationEngine, ConversationConfig
 from app.orchestration.scheduler import create_scheduler
+from app.orchestration.goal_loop import GoalEngine
 from app.audio import TTSConfig, STTConfig, create_tts_adapter, create_stt_adapter
 from app.memory import SQLiteStore, MemorySummarizer, MemoryManager, ContextManager
 from app.tools import ToolGateway, TerminalTool, FilesystemTool, WebTool, TestingTool, KnowledgeTool, SystemTool, set_tool_gateway
@@ -48,6 +49,8 @@ class SandboxApp:
         set_event_bus(self.event_bus)
         self.model_registry = get_model_registry()
         self.conversation_engine: Optional[ConversationEngine] = None
+        self.goal_engine: Optional[GoalEngine] = None
+        self.goal_engine_task: Optional[asyncio.Task] = None
         self.memory_manager: Optional[MemoryManager] = None
         self.permission_manager: Optional[PermissionManager] = None
         self.resource_manager: Optional[ResourceManager] = None
@@ -241,9 +244,11 @@ class SandboxApp:
         dynamic_tool = CreateToolTool()
         self.tool_gateway.register(dynamic_tool)
         
-        from app.tools.orchestration import DelegateTaskTool
+        from app.tools.orchestration import DelegateTaskTool, SubmitTaskResultTool
         delegate_tool = DelegateTaskTool()
         self.tool_gateway.register(delegate_tool)
+        submit_result_tool = SubmitTaskResultTool()
+        self.tool_gateway.register(submit_result_tool)
         
         if tools_config.get("web", {}).get("enabled", True):
             web = WebTool(
@@ -320,6 +325,8 @@ You also have access to the `knowledge_search` tool. Use it to search your long-
         
         self.conversation_engine.add_interrupt_callback(self._on_interrupt)
         self.conversation_engine.add_turn_callback(self._on_turn_autonomy)
+        
+        self.goal_engine = GoalEngine(conversation_engine=self.conversation_engine)
         
         self._setup_tool_integration()
         self._setup_event_logging()
@@ -481,6 +488,9 @@ You also have access to the `knowledge_search` tool. Use it to search your long-
         if self.resource_manager:
             await self.resource_manager.start()
         
+        if self.goal_engine:
+            self.goal_engine_task = asyncio.create_task(self.goal_engine.run())
+        
         await self.conversation_engine.start()
         
         if self.start_paused:
@@ -510,6 +520,10 @@ You also have access to the `knowledge_search` tool. Use it to search your long-
             for tool in self.tool_gateway._tools.values():
                 if hasattr(tool, 'close'):
                     await tool.close()
+        if self.goal_engine:
+            self.goal_engine.stop()
+            if self.goal_engine_task:
+                self.goal_engine_task.cancel()
         if self.conversation_engine:
             await self.conversation_engine.stop()
         await self.model_registry.close_all()

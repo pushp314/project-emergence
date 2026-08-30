@@ -84,3 +84,39 @@ class DelegateTaskTool(Tool):
         except Exception as e:
             return f"Sub-Agent '{role}' failed with error: {str(e)}"
 
+class SubmitTaskResultTool(Tool):
+    @property
+    def name(self) -> str:
+        return "submit_task_result"
+    
+    @property
+    def description(self) -> str:
+        return "Submit the result of a master task assigned to you. Use this to notify the overarching orchestrator that you have finished your assigned task."
+    
+    @property
+    def input_schema(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "result": {
+                    "type": "string",
+                    "description": "A detailed summary of what was accomplished and the final result of the task."
+                }
+            },
+            "required": ["result"]
+        }
+    
+    @property
+    def permission(self) -> PermissionLevel:
+        return PermissionLevel.READ
+    
+    @property
+    def risk(self) -> RiskLevel:
+        return RiskLevel.LOW
+    
+    @property
+    def enabled(self) -> bool:
+        return True
+    
+    async def execute(self, arguments: Dict[str, Any]) -> Any:
+        return "Task result submitted successfully. Please wait for the orchestrator to evaluate or provide the next task."
