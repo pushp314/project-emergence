@@ -101,7 +101,11 @@ class SandboxApp:
         summarization_interval = memory_config.get("summarization_interval", 10)
         
         store = SQLiteStore(db_path)
-        summarizer = MemorySummarizer(store, self.model_registry.get("default"))
+        from app.memory.vector_store import VectorMemoryStore
+        import os
+        self.vector_store = VectorMemoryStore(os.path.dirname(db_path))
+        
+        summarizer = MemorySummarizer(store, self.model_registry.get("default"), vector_store=self.vector_store)
         summarizer.set_interval(summarization_interval)
         self.memory_manager = MemoryManager(store, summarizer, self.event_bus, max_entries)
         
@@ -109,6 +113,7 @@ class SandboxApp:
             store=store,
             summarizer=summarizer,
             event_bus=self.event_bus,
+            vector_store=self.vector_store,
             max_context_tokens=8192,
             summarization_interval=summarization_interval
         )

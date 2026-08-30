@@ -32,9 +32,10 @@ Respond in JSON format:
 
 
 class MemorySummarizer:
-    def __init__(self, store: SQLiteStore, model_adapter: Optional[ModelAdapter] = None):
+    def __init__(self, store: SQLiteStore, model_adapter: Optional[ModelAdapter] = None, vector_store: Optional[Any] = None):
         self.store = store
         self.model = model_adapter or get_model_registry().get()
+        self.vector_store = vector_store
         self._summarization_interval = 10
     
     def set_interval(self, interval: int) -> None:
@@ -91,6 +92,22 @@ class MemorySummarizer:
             )
             
             self.store.save_summary(summary_record)
+            
+            # Index the summary in Vector Database (RAG)
+            if self.vector_store:
+                summary_content = f"Topic: {summary_record.topic}\nKey points: {', '.join(summary_record.key_points)}\nImportant facts: {', '.join(summary_record.important_facts)}"
+                metadata = {
+                    "type": "conversation_summary",
+                    "conversation_id": conversation_id,
+                    "turn_start": start_turn,
+                    "turn_end": current_turn,
+                    "topic": summary_record.topic
+                }
+                # Support both sync and async add_memory
+                if hasattr(self.vector_store, 'add_memory_async'):
+                    await self.vector_store.add_memory_async(summary_record.id, summary_content, metadata)
+                else:
+                    self.vector_store.add_memory(summary_record.id, summary_content, metadata)
             
             return ConversationSummary(
                 conversation_id=conversation_id,

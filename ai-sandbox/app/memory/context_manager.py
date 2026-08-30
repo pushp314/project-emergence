@@ -279,7 +279,34 @@ class ContextManager:
 
         # Build context text
         context_parts = []
+        
+        # 1. Inject semantic memories (RAG)
+        if self.vector_store and recent_messages:
+            # Query vector store using the last 3 messages as context
+            query_text = " ".join([getattr(m, "content", "") for m in recent_messages[-3:]])
+            if query_text.strip():
+                try:
+                    if hasattr(self.vector_store, 'query_memories_async'):
+                        semantic_results = await self.vector_store.query_memories_async(
+                            query=query_text, n_results=3, 
+                            where=None
+                        )
+                    else:
+                        semantic_results = self.vector_store.query_memories(
+                            query=query_text, n_results=3, 
+                            where=None
+                        )
+                    
+                    if semantic_results:
+                        context_parts.append("Relevant Past Memories (from Vector DB):")
+                        for res in semantic_results:
+                            if "content" in res:
+                                context_parts.append(f"- {res['content']}")
+                        context_parts.append("") # blank line
+                except Exception as e:
+                    logger.error(f"Error querying semantic memory: {e}")
 
+        # 2. Inject current short-term context
         if latest_summary:
             context_parts.append(f"Current conversation topic: {latest_summary.topic}")
             if latest_summary.key_points:
