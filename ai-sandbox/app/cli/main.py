@@ -72,6 +72,15 @@ async def _start_sandbox(config_path: str):
 
 @cli.command()
 @click.option('--config', '-c', default='./config.yaml', help='Config file path')
+@click.option('--port', '-p', default=8000, help='API port')
+def api(config, port):
+    """Start the FastAPI server"""
+    from app.api.server import start_server
+    start_server(config, port)
+
+
+@cli.command()
+@click.option('--config', '-c', default='./config.yaml', help='Config file path')
 def watch(config):
     """Watch agents without interactive input"""
     asyncio.run(_watch_sandbox(config))
