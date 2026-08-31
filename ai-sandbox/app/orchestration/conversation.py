@@ -197,7 +197,15 @@ class ConversationEngine:
                     await asyncio.sleep(0.5)
                     continue
                 
-                await self._process_turn()
+                try:
+                    await self._process_turn()
+                    # Reset error backoff on successful turn
+                    self._consecutive_errors = 0
+                except Exception as turn_err:
+                    self._consecutive_errors = getattr(self, '_consecutive_errors', 0) + 1
+                    backoff = min(10 * self._consecutive_errors, 60)
+                    logger.warning(f"Turn error (attempt {self._consecutive_errors}), backing off {backoff}s: {turn_err}")
+                    await asyncio.sleep(backoff)
                 
                 # Check for shutdown after each turn completes
                 if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:
@@ -263,8 +271,14 @@ class ConversationEngine:
             logger.warning(f"Agent {speaker_id} timed out")
             response = f"[Agent {speaker_id} timed out after {self.config.turn_timeout_seconds}s]"
         except Exception as e:
+            error_str = str(e)
             logger.error(f"Agent {speaker_id} error: {e}")
             response = f"[Agent {speaker_id} error: {e}]"
+            # Back off on rate limits or connection failures
+            if "429" in error_str or "Too Many Requests" in error_str or "connection" in error_str.lower():
+                wait = 15
+                logger.info(f"Rate limited — waiting {wait}s before next turn")
+                await asyncio.sleep(wait)
         
         # Check for shutdown after generation
         if self._shutdown_requested or self.state_machine.state == SMState.GRACEFUL_SHUTDOWN:

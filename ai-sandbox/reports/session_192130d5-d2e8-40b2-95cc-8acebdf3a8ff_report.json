@@ -1,0 +1,41 @@
+{
+  "session_info": {
+    "session_id": "192130d5-d2e8-40b2-95cc-8acebdf3a8ff",
+    "session_number": 73,
+    "status": "RUNNING",
+    "start_time": "2026-08-31T17:39:44.631129+00:00",
+    "end_time": null,
+    "configuration": "{\"session_id\": \"192130d5-d2e8-40b2-95cc-8acebdf3a8ff\", \"max_turns\": 1000, \"turn_timeout_seconds\": 900, \"short_term_turns\": 8, \"initial_speaker\": \"agent_a\", \"scheduler_policy\": \"round_robin\", \"model_config\": {\"routes\": {\"default\": {\"provider\": \"gemini\", \"name\": \"gemini-2.5-flash\", \"context_window\": 1000000, \"fallbacks\": [\"openrouter_route\", \"local_ollama\"]}, \"openrouter_route\": {\"provider\": \"openrouter\", \"name\": \"google/gemma-4-31b-it:free\", \"context_window\": 262144, \"fallback\": \"local_ollama\"}, \"local_ollama\": {\"provider\": \"ollama\", \"name\": \"qwen2.5-coder:7b\", \"host\": \"http://127.0.0.1:11434\", \"context_window\": 32768, \"auto_detect\": true}, \"planning\": {\"provider\": \"gemini\", \"name\": \"gemini-2.5-flash\", \"context_window\": 1000000, \"fallbacks\": [\"openrouter_route\", \"local_ollama\"]}, \"critical_review\": {\"provider\": \"openrouter\", \"name\": \"anthropic/claude-sonnet-4.5\", \"context_window\": 200000, \"fallback\": \"openrouter_route\"}, \"observer\": {\"provider\": \"gemini\", \"name\": \"gemini-2.5-flash\", \"context_window\": 1000000, \"fallbacks\": [\"openrouter_route\", \"local_ollama\"]}}}, \"resource_config\": {\"memory_warning_gb\": 12, \"memory_critical_gb\": 14, \"cpu_warning_percent\": 80, \"cpu_critical_percent\": 95, \"generation_latency_warning_ms\": 5000, \"check_interval_seconds\": 5}, \"permissions_config\": {\"levels\": [\"read\", \"write\", \"execute\", \"network\"], \"auto_approve_low_risk\": true, \"high_risk_categories\": [\"install\", \"system\"], \"timeout_seconds\": 30}, \"tools_config\": {\"terminal\": {\"enabled\": true, \"permission\": \"execute\", \"risk\": \"high\", \"allowed_commands\": [\"ls\", \"cat\", \"pwd\", \"echo\", \"python\", \"pip\", \"git\", \"node\", \"npm\", \"curl\", \"mkdir\", \"cp\", \"mv\", \"touch\"]}, \"filesystem\": {\"enabled\": true, \"permission\": \"write\", \"risk\": \"medium\"}, \"web\": {\"enabled\": true, \"permission\": \"network\", \"risk\": \"medium\"}}, \"autonomy_config\": {\"enabled\": true, \"auto_accept_proposals\": false, \"proposal_interval\": 20}}",
+    "model_configuration": "{\"routes\": {\"default\": {\"provider\": \"gemini\", \"name\": \"gemini-2.5-flash\", \"context_window\": 1000000, \"fallbacks\": [\"openrouter_route\", \"local_ollama\"]}, \"openrouter_route\": {\"provider\": \"openrouter\", \"name\": \"google/gemma-4-31b-it:free\", \"context_window\": 262144, \"fallback\": \"local_ollama\"}, \"local_ollama\": {\"provider\": \"ollama\", \"name\": \"qwen2.5-coder:7b\", \"host\": \"http://127.0.0.1:11434\", \"context_window\": 32768, \"auto_detect\": true}, \"planning\": {\"provider\": \"gemini\", \"name\": \"gemini-2.5-flash\", \"context_window\": 1000000, \"fallbacks\": [\"openrouter_route\", \"local_ollama\"]}, \"critical_review\": {\"provider\": \"openrouter\", \"name\": \"anthropic/claude-sonnet-4.5\", \"context_window\": 200000, \"fallback\": \"openrouter_route\"}, \"observer\": {\"provider\": \"gemini\", \"name\": \"gemini-2.5-flash\", \"context_window\": 1000000, \"fallbacks\": [\"openrouter_route\", \"local_ollama\"]}}}",
+    "project_version": "30a79b60d506ab3146386a1fabbfd4c8149cbbae",
+    "environment_metadata": "{}",
+    "summary": null,
+    "recovery_state": "{}",
+    "current_turn": 0,
+    "current_speaker": "agent_a",
+    "next_speaker": "agent_a",
+    "active_agents": "[\"agent_a\", \"agent_b\", \"agent_c\"]",
+    "created_at": "2026-08-31T17:39:44.631129+00:00",
+    "updated_at": "2026-08-31T17:39:44.631143+00:00"
+  },
+  "timeline": [
+    {
+      "timestamp": "2026-08-31T17:39:44.615834+00:00",
+      "event_type": "system_error",
+      "agent": "unknown",
+      "intent": "System resumed",
+      "reason": "System resumed from pause",
+      "evidence_id": "E-9d7da2e2"
+    },
+    {
+      "timestamp": "2026-08-31T17:39:44.646084+00:00",
+      "event_type": "system_error",
+      "agent": "unknown",
+      "intent": "System resumed",
+      "reason": "System resumed from pause",
+      "evidence_id": "E-1f701ec8"
+    }
+  ],
+  "evidence_count": 2,
+  "generated_at": "2026-08-31T17:39:46.056796+00:00"
+}

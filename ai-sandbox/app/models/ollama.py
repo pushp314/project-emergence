@@ -11,6 +11,64 @@ from app.models.base import ModelAdapter, ModelConfig, GenerationRequest, Genera
 
 logger = logging.getLogger(__name__)
 
+# Priority ranking for local models
+DEFAULT_MODEL_PRIORITIES = [
+    "qwen2.5-coder:7b",
+    "deepseek-r1:7b-qwen-distill-q4_K_M",
+    "huihui_ai/qwen3-abliterated:8b",
+    "dolphin-llama3:latest",
+    "dolphin-llama3:8b",
+    "hf.co/nbpedro315/Dolphin3-Cyber-8B-GGUF:Q4_K_M",
+]
+
+
+async def list_available_ollama_models(host: str = "http://127.0.0.1:11434") -> List[str]:
+    """Query Ollama API to fetch all locally downloaded models."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{host.rstrip('/')}/api/tags")
+            if resp.status_code == 200:
+                data = resp.json()
+                models = [m["name"] for m in data.get("models", [])]
+                return models
+    except Exception as e:
+        logger.debug(f"Failed to query Ollama tags at {host}: {e}")
+    return []
+
+
+async def discover_best_ollama_model(
+    host: str = "http://127.0.0.1:11434",
+    role: Optional[str] = None,
+    preferred_model: Optional[str] = None
+) -> Optional[str]:
+    """Auto-detect and rank the best available model in local Ollama library."""
+    available = await list_available_ollama_models(host)
+    if not available:
+        return None
+
+    # If preferred model is explicitly available, use it
+    if preferred_model and preferred_model in available:
+        return preferred_model
+
+    # Match role-specific preferences
+    if role in ("developer", "coder"):
+        coder_models = [m for m in available if "coder" in m.lower()]
+        if coder_models:
+            return coder_models[0]
+    elif role in ("planning", "architect", "observer"):
+        reasoning_models = [m for m in available if "r1" in m.lower() or "reasoning" in m.lower()]
+        if reasoning_models:
+            return reasoning_models[0]
+
+    # Check priority list
+    for candidate in DEFAULT_MODEL_PRIORITIES:
+        for av in available:
+            if candidate == av or candidate.split(":")[0] == av.split(":")[0]:
+                return av
+
+    # Return first available model
+    return available[0]
+
 
 class OllamaAdapter(ModelAdapter):
     def __init__(self, config: ModelConfig, host: str = "http://127.0.0.1:11434"):
@@ -26,20 +84,7 @@ class OllamaAdapter(ModelAdapter):
     
     async def _ensure_model_loaded(self) -> None:
         if not self._model_loaded:
-            await self._pull_model()
             self._model_loaded = True
-    
-    async def _pull_model(self) -> None:
-        client = await self._ensure_client()
-        try:
-            resp = await client.post(
-                f"{self._host}/api/pull",
-                json={"name": self._config.name, "stream": False}
-            )
-            if resp.status_code != 200:
-                logger.warning(f"Model pull returned {resp.status_code}: {resp.text}")
-        except Exception as e:
-            logger.warning(f"Failed to pull model {self._config.name}: {e}")
     
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         await self._ensure_model_loaded()
@@ -73,12 +118,10 @@ class OllamaAdapter(ModelAdapter):
                 raise RuntimeError(f"Ollama API error {resp.status_code}: {resp.text}")
             
             data = resp.json()
-            
             latency_ms = (time.time() - start_time) * 1000
             
             message = data.get("message", {})
             text = message.get("content", "")
-            
             tokens = data.get("eval_count", 0)
             
             return GenerationResponse(
@@ -144,17 +187,6 @@ class OllamaAdapter(ModelAdapter):
             raise
     
     async def count_tokens(self, text: str) -> int:
-        client = await self._ensure_client()
-        try:
-            resp = await client.post(
-                f"{self._host}/api/embeddings",
-                json={"model": self._config.name, "prompt": text}
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                return len(data.get("embedding", []))
-        except Exception:
-            pass
         return len(text) // 4
     
     async def health_check(self) -> bool:
@@ -168,6 +200,7 @@ class OllamaAdapter(ModelAdapter):
     def get_model_info(self) -> Dict[str, Any]:
         return {
             "name": self._config.name,
+            "backend": "ollama",
             "context_window": self._config.context_window,
             "max_output_tokens": self._config.max_output_tokens,
             "temperature": self._config.temperature,
@@ -182,7 +215,17 @@ class OllamaAdapter(ModelAdapter):
         self._model_loaded = False
 
 
-async def create_ollama_adapter(config: ModelConfig, host: str = "http://127.0.0.1:11434") -> OllamaAdapter:
+async def create_ollama_adapter(
+    config: ModelConfig,
+    host: str = "http://127.0.0.1:11434",
+    auto_detect: bool = True
+) -> OllamaAdapter:
+    if auto_detect:
+        detected = await discover_best_ollama_model(host, preferred_model=config.name)
+        if detected:
+            logger.info(f"Ollama auto-detected local model: {detected}")
+            config.name = detected
+
     adapter = OllamaAdapter(config, host)
     healthy = await adapter.health_check()
     if not healthy:

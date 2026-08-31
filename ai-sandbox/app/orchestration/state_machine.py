@@ -81,10 +81,15 @@ class StateMachine:
         return False
     
     def resume(self) -> bool:
-        if self._state == ConversationState.PAUSED and self._resume_state:
-            target = self._resume_state
-            self._resume_state = None
-            return self.transition(target)
+        if self._state == ConversationState.PAUSED:
+            if self._resume_state and self.can_transition(self._resume_state):
+                target = self._resume_state
+                self._resume_state = None
+                return self.transition(target)
+            else:
+                # Can't go back to the original state (e.g. GENERATING), fall back to IDLE
+                self._resume_state = None
+                return self.transition(ConversationState.IDLE)
         elif self._state == ConversationState.PROCESS_HUMAN_INPUT:
             return self.transition(ConversationState.THINKING)
         return False

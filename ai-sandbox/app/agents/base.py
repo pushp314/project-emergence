@@ -490,35 +490,75 @@ class BaseAgent(ABC):
         """Generate a fallback response when action not useful."""
         return f"I need to reconsider my approach. {reason}"
 
+    def _extract_tool_calls(self, text: str) -> List[tuple[str, Dict[str, Any]]]:
+        """Extract tool calls from text, supporting nested JSON, markdown blocks, and relaxed syntax."""
+        import re, json
+        calls = []
+        
+        # Method 1: Find [TOOL:tool_name: and balance braces
+        prefix_pattern = re.compile(r'\[TOOL:([a-zA-Z0-9_\-]+):')
+        for match in prefix_pattern.finditer(text):
+            tool_name = match.group(1)
+            start_idx = match.end()
+            
+            # Find the balanced closing ']' corresponding to this tool call
+            brace_count = 0
+            json_start = -1
+            json_end = -1
+            
+            for i in range(start_idx, len(text)):
+                ch = text[i]
+                if ch == '{':
+                    if json_start == -1:
+                        json_start = i
+                    brace_count += 1
+                elif ch == '}':
+                    brace_count -= 1
+                    if brace_count == 0 and json_start != -1:
+                        json_end = i + 1
+                        break
+            
+            if json_start != -1 and json_end != -1:
+                json_str = text[json_start:json_end]
+                try:
+                    args = json.loads(json_str)
+                    calls.append((tool_name, args))
+                except json.JSONDecodeError:
+                    # Attempt relaxed parsing
+                    try:
+                        clean_json = json_str.replace("'", '"')
+                        args = json.loads(clean_json)
+                        calls.append((tool_name, args))
+                    except Exception:
+                        pass
+                        
+        return calls
+
     async def _think_with_tools(self, context: AgentContext, max_iterations: int = 5) -> str:
         """Think with tool-calling capability, supporting recursive auto-healing."""
-        import re, json
-        tool_pattern = r'(?s)\[TOOL:(\w+):(\{.*?\})\]'
-        
         full_response = ""
         current_response = await self.generate_response(context)
         
         for iteration in range(max_iterations):
             full_response += current_response
-            matches = re.findall(tool_pattern, current_response)
+            tool_calls = self._extract_tool_calls(current_response)
             
-            if not matches:
+            if not tool_calls:
                 break
                 
             tool_results = []
             images = []
-            for tool_name, args_json in matches:
+            for tool_name, args in tool_calls:
                 try:
-                    args = json.loads(args_json)
                     text_res, image_res = await self._run_tool(context, tool_name, args)
-                    tool_results.append(f"[{tool_name} result: {text_res}]")
+                    tool_results.append(f"[{tool_name} result:\n{text_res}\n]")
                     if image_res:
                         images.append(image_res)
                 except Exception as e:
                     tool_results.append(f"[{tool_name} error: {e}]")
             
             if tool_results:
-                tool_context = "\n".join(tool_results)
+                tool_context = "\n\n".join(tool_results)
                 full_response += "\n\n"
                 
                 # Update context with tool results to simulate inner monologue
@@ -568,11 +608,17 @@ class BaseAgent(ABC):
             if isinstance(result.result, dict) and "image_base64" in result.result:
                 image_base64 = result.result.pop("image_base64")
             
-            return str(result.result)[:500], image_base64
+            # Allow up to 4000 characters of rich output for actionable context
+            output_str = str(result.result)
+            if len(output_str) > 4000:
+                output_str = output_str[:4000] + "... (truncated)"
+            
+            return output_str, image_base64
         except asyncio.TimeoutError:
             return "Tool execution timed out", None
         finally:
             self.event_bus.unsubscribe(EventType.TOOL_COMPLETED, handler)
+            self.event_bus.unsubscribe(EventType.TOOL_FAILED, handler)
             self.event_bus.unsubscribe(EventType.TOOL_FAILED, handler)
     
     async def _generate_with_tool_results(self, context: AgentContext, tool_results: str, images: Optional[List[str]] = None) -> str:

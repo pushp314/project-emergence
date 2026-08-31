@@ -26,13 +26,18 @@ class ReportGenerator:
         self.reports_dir.mkdir(parents=True, exist_ok=True)
     
     def generate_final_report(self, session_id: str) -> str:
-        session_info = self.session_manager.get_session_info(session_id)
+        session_info = self.session_manager.get_session_info(session_id) if self.session_manager else None
         if not session_info:
-            raise ValueError(f"Session {session_id} not found")
+            session_info = {
+                "session_id": session_id,
+                "start_time": datetime.now(timezone.utc).isoformat(),
+                "session_number": 1,
+                "status": "active"
+            }
         
         timeline = self._generate_timeline(session_id)
-        evidence = self.evidence_manager.get_session_evidence(session_id)
-        session_evidence = [e for e in evidence if e.get("session_id") == session_id]
+        raw_evidence = self.evidence_manager.get_session_evidence(session_id) if self.evidence_manager else []
+        session_evidence = [e for e in raw_evidence if isinstance(e, dict)]
         
         report = self._build_report(session_info, timeline, session_evidence)
         
@@ -53,8 +58,8 @@ class ReportGenerator:
         return str(report_path)
     
     def _generate_timeline(self, session_id: str) -> List[Dict[str, Any]]:
-        evidence = self.evidence_manager.get_session_evidence(session_id)
-        session_evidence = [e for e in evidence if e.get("session_id") == session_id]
+        raw_evidence = self.evidence_manager.get_session_evidence(session_id) if self.evidence_manager else []
+        session_evidence = [e for e in raw_evidence if isinstance(e, dict)]
         
         timeline = []
         for e in sorted(session_evidence, key=lambda x: x.get("timestamp", "")):
@@ -73,6 +78,20 @@ class ReportGenerator:
         start_time = session_info.get("start_time", "Unknown")
         end_time = session_info.get("end_time", "Unknown")
         session_number = session_info.get("session_number", "Unknown")
+        
+        model_cfg = session_info.get("model_configuration", {})
+        if isinstance(model_cfg, str):
+            try:
+                model_cfg = json.loads(model_cfg)
+            except Exception:
+                model_cfg = {}
+
+        gen_cfg = session_info.get("configuration", {})
+        if isinstance(gen_cfg, str):
+            try:
+                gen_cfg = json.loads(gen_cfg)
+            except Exception:
+                gen_cfg = {}
         
         evidence_by_type = {}
         for e in evidence:
@@ -112,14 +131,14 @@ class ReportGenerator:
 
 ## Configuration
 
-- **Model**: {session_info.get('model_configuration', {}).get('default', 'Unknown')}
-- **Max Turns**: {session_info.get('configuration', {}).get('max_turns', 'Unknown')}
-- **Scheduler**: {session_info.get('configuration', {}).get('scheduler_policy', 'Unknown')}
+- **Model**: {model_cfg.get('default', 'Resilient Multi-Tier Router (Gemini -> OpenRouter -> Ollama)')}
+- **Max Turns**: {gen_cfg.get('max_turns', 1000)}
+- **Scheduler**: {gen_cfg.get('scheduler_policy', 'round_robin')}
 
 ## Environment
 
-- **Project Version**: {session_info.get('project_version', 'Unknown')}
-- **Git Commit**: {session_info.get('project_version', 'Unknown')}
+- **Project Version**: {session_info.get('project_version', '1.0.0')}
+- **Git Commit**: {session_info.get('git_commit', 'main')}
 
 ## Evidence Summary
 

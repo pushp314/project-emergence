@@ -59,6 +59,7 @@ class SandboxApp:
         self.a2a_protocol: Optional[A2AProtocol] = None
         self.evidence_manager: Optional[EvidenceManager] = None
         self.session_manager: Optional[SessionManager] = None
+        self.self_modification_engine = None
         self._shutdown_event = asyncio.Event()
         self._tts = None
         self._stt = None
@@ -73,13 +74,18 @@ class SandboxApp:
     async def initialize(self) -> None:
         logger.info("Initializing AI Sandbox...")
         
+        from app.models.openrouter import OpenRouterAdapter
+        from app.models.circuit_breaker import ResilientRouter
+        
         _ADAPTER_FACTORIES = {
-            "ollama": lambda cfg, route: create_ollama_adapter(cfg, route.get("host", "http://127.0.0.1:11434")),
+            "ollama": lambda cfg, route: create_ollama_adapter(cfg, route.get("host", "http://127.0.0.1:11434"), auto_detect=route.get("auto_detect", True)),
             "mlx": lambda cfg, route: MLXServerAdapter(cfg, route.get("host", "http://127.0.0.1:8081")),
-            "gemini": lambda cfg, route: GeminiAdapter(cfg),
+            "gemini": lambda cfg, route: GeminiAdapter(cfg, api_key=route.get("keys") or route.get("key")),
+            "openrouter": lambda cfg, route: OpenRouterAdapter(cfg, api_key=route.get("key")),
         }
         
         routes = self.config.get("model", {}).get("routes", {})
+        # First pass: initialize base adapters
         for role_name, route in routes.items():
             cfg = ModelConfig(
                 name=route["name"],
@@ -88,25 +94,54 @@ class SandboxApp:
                 temperature=route.get("temperature", 0.7),
                 timeout_seconds=route.get("timeout", 120),
             )
-            adapter = _ADAPTER_FACTORIES[route["provider"]](cfg, route)
-            if asyncio.iscoroutine(adapter):
-                adapter = await adapter
-            self.model_registry.register(role_name, adapter, is_default=(role_name == "default"))
+            provider_type = route.get("provider", "ollama")
+            if provider_type in _ADAPTER_FACTORIES:
+                adapter = _ADAPTER_FACTORIES[provider_type](cfg, route)
+                if asyncio.iscoroutine(adapter):
+                    adapter = await adapter
+                self.model_registry.register(role_name, adapter, is_default=(role_name == "default"))
             
-        from app.models.fallback import FallbackAdapter
+        # Second pass: construct ResilientRouter multi-tier fallback chains
+        def _make_switch_callback(r_name: str):
+            def _on_switch(prev: str, curr: str, reason: str):
+                asyncio.create_task(
+                    self.event_bus.publish_type(
+                        EventType.MODEL_PROVIDER_SWITCH,
+                        "",
+                        {
+                            "route": r_name,
+                            "previous_provider": prev,
+                            "active_provider": curr,
+                            "reason": reason[:200]
+                        }
+                    )
+                )
+            return _on_switch
+
         for role_name, route in routes.items():
-            fallback_name = route.get("fallback")
-            if fallback_name:
+            fallback_list = []
+            if "fallbacks" in route:
+                fallback_list = list(route["fallbacks"])
+            elif "fallback" in route and route["fallback"]:
+                fallback_list = [route["fallback"]]
+
+            if fallback_list:
                 primary = self.model_registry.get(role_name)
-                try:
-                    fallback = self.model_registry.get(fallback_name)
-                    fallback_adapter = FallbackAdapter(primary, fallback)
-                    self.model_registry.register(role_name, fallback_adapter, is_default=(role_name == "default"))
-                    logger.info(f"Registered fallback for {role_name}: {fallback_name}")
-                except Exception as e:
-                    logger.error(f"Failed to setup fallback for {role_name}: {e}")
+                tiers = [(role_name, primary)]
+                for fb_name in fallback_list:
+                    if fb_name in self.model_registry._adapters:
+                        tiers.append((fb_name, self.model_registry.get(fb_name)))
+                
+                if len(tiers) > 1:
+                    router = ResilientRouter(
+                        tiers=tiers,
+                        cooldown_seconds=30.0,
+                        on_switch_callback=_make_switch_callback(role_name)
+                    )
+                    self.model_registry.register(role_name, router, is_default=(role_name == "default"))
+                    logger.info(f"Registered ResilientRouter for '{role_name}' with tiers: {[t[0] for t in tiers]}")
         
-        logger.info("Models initialized")
+        logger.info("Models initialized with Resilient Multi-Provider Routers")
         
         memory_config = self.config.get("memory", {})
         db_path = memory_config.get("db_path", "./data/memory.db")
@@ -280,6 +315,8 @@ class SandboxApp:
             self.tool_gateway.register(PlaywrightBrowserTool())
         
         async def permission_checker(agent_id: str, perm: PermissionLevel, risk: RiskLevel) -> bool:
+            if agent_id in ("operator", "dashboard_operator", "cli_operator", "human", "human_operator"):
+                return True
             if risk in (RiskLevel.HIGH, RiskLevel.CRITICAL) or perm == PermissionLevel.SYSTEM:
                 return await self.permission_manager.request_permission(
                     agent_id=agent_id,
@@ -335,6 +372,39 @@ You also have access to the `knowledge_search` tool. Use it to search your long-
         self.conversation_engine.add_turn_callback(self._on_turn_autonomy)
         
         self.goal_engine = GoalEngine(conversation_engine=self.conversation_engine)
+        
+        from app.self_modification.engine import SelfModificationEngine
+        self.self_modification_engine = SelfModificationEngine(
+            evidence_manager=self.evidence_manager,
+            project_root=str(Path(__file__).parent.parent)
+        )
+
+        from app.research.manager import ResearchManager, set_research_manager
+        self.research_manager = ResearchManager(
+            evidence_manager=self.evidence_manager,
+            tool_gateway=self.tool_gateway
+        )
+        set_research_manager(self.research_manager)
+
+        if self.a2a_protocol:
+            self.a2a_protocol.register_peer(AgentCard(
+                agent_id="agent_a",
+                name="Atlas (Manager CEO)",
+                description="Autonomous task breakdown and delegation orchestrator",
+                capabilities=["delegation", "task_planning", "code_orchestration"]
+            ))
+            self.a2a_protocol.register_peer(AgentCard(
+                agent_id="agent_b",
+                name="Argus (Explorer & Specialist)",
+                description="Deep execution, terminal tooling, and knowledge discovery",
+                capabilities=["terminal", "filesystem", "testing", "web"]
+            ))
+            self.a2a_protocol.register_peer(AgentCard(
+                agent_id="agent_c",
+                name="Observer (Ethics & Safety)",
+                description="Safety verification, loop detection, and alignment interventions",
+                capabilities=["monitoring", "self_correction", "safety"]
+            ))
         
         self._setup_tool_integration()
         self._setup_event_logging()

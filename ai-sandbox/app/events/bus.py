@@ -54,6 +54,9 @@ class EventType(str, Enum):
     CONVERSATION_TURN_START = "conversation.turn.start"
     CONVERSATION_TURN_END = "conversation.turn.end"
     CONVERSATION_SUMMARIZED = "conversation.summarized"
+    
+    MODEL_PROVIDER_SWITCH = "model.provider_switch"
+    CIRCUIT_BREAKER_UPDATE = "model.circuit_breaker_update"
 
 
 @dataclass

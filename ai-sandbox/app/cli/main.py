@@ -247,6 +247,21 @@ async def _handle_command(app: SandboxApp, command: str):
         await _deny_permission(app, args[0] if args else None)
     elif cmd in ("/tools", "/t"):
         await _show_tools(app)
+    elif cmd in ("/tool",):
+        if not args:
+            console.print("[red]Usage: /tool <tool_name> [json_arguments][/red]")
+        else:
+            tool_name = args[0]
+            args_str = " ".join(args[1:]) if len(args) > 1 else "{}"
+            await _run_cli_tool(app, tool_name, args_str)
+    elif cmd in ("/models", "/model"):
+        await _show_models(app)
+    elif cmd in ("/search", "/find"):
+        query = " ".join(args)
+        if query:
+            await _search_memory_cli(app, query)
+        else:
+            console.print("[red]Usage: /search <query>[/red]")
     elif cmd in ("/resources", "/res"):
         await _show_resources(app)
     elif cmd in ("/logs", "/l"):
@@ -444,6 +459,12 @@ def _show_help():
 [bold]Audio:[/bold]
   /tts               Toggle text-to-speech
 
+[bold]Tools & Capabilities:[/bold]
+  /tools             Show all registered tools & permissions
+  /tool <name> [json] Execute any tool manually (e.g. /tool terminal {"command":"ls"})
+  /models            Show active LLM provider tiers, circuit breakers & key pool
+  /search <query>    Search vector memory embeddings
+
 [bold]Other:[/bold]
   /help              Show this help
   /pause             Pause (same as /stop)
@@ -451,7 +472,6 @@ def _show_help():
   /sessions          List sessions
   /memory            Show memory
   /evidence          Show evidence
-  /tools             Show tools
   /resources         Show resource usage
   /logs              Show logs
   /report            Generate report
@@ -709,6 +729,92 @@ async def _show_tools(app: SandboxApp):
         table.add_row(t.name, t.description[:50], t.permission.value, t.risk.value)
     
     console.print(table)
+
+
+async def _run_cli_tool(app: SandboxApp, tool_name: str, args_str: str):
+    import json
+    if not app.tool_gateway:
+        console.print("[red]Tool gateway not available[/red]")
+        return
+
+    try:
+        arguments = json.loads(args_str) if args_str.strip() else {}
+    except Exception as e:
+        console.print(f"[red]Invalid JSON arguments: {e}[/red]")
+        return
+
+    from app.events.schemas import ToolCall
+    call = ToolCall(tool_name=tool_name, arguments=arguments, agent_id="cli_operator")
+    console.print(f"[cyan]Executing tool '{tool_name}' with args:[/cyan] {arguments}")
+    
+    result = await app.tool_gateway.execute(call)
+    if result.success:
+        console.print(Panel(str(result.result), title=f"✓ Tool Result ({tool_name})", border_style="green"))
+    else:
+        console.print(Panel(str(result.error), title=f"✗ Tool Error ({tool_name})", border_style="red"))
+
+
+async def _show_models(app: SandboxApp):
+    registry = app.model_registry
+    table = Table(title="Model Providers & Resilient Routers")
+    table.add_column("Route", style="cyan")
+    table.add_column("Active Model", style="white")
+    table.add_column("State", style="green")
+    table.add_column("Failover Chain", style="dim")
+    table.add_column("Key Pool / Details", style="white")
+
+    for name, adapter in registry._adapters.items():
+        if hasattr(adapter, "get_telemetry"):
+            telemetry = adapter.get_telemetry()
+            active = telemetry.get("active_tier", name)
+            tiers = telemetry.get("tiers", [])
+            tier_names = [f"{t['name']} ({t['state']})" for t in tiers]
+            
+            key_details = "N/A"
+            for t in tiers:
+                if "details" in t and "key_pool" in t["details"]:
+                    kp = t["details"]["key_pool"]
+                    key_details = f"{kp.get('active_keys', 0)}/{kp.get('total_keys', 0)} Keys Active"
+
+            table.add_row(
+                name,
+                active,
+                "[green]Online[/green]",
+                " ➔ ".join(tier_names),
+                key_details
+            )
+        elif hasattr(adapter, "get_model_info"):
+            info = adapter.get_model_info()
+            table.add_row(name, info.get("name", name), "[green]Direct[/green]", "None", str(info.get("backend", "")))
+        else:
+            table.add_row(name, name, "[white]Custom[/white]", "None", type(adapter).__name__)
+
+    console.print(table)
+
+
+async def _search_memory_cli(app: SandboxApp, query: str):
+    if not app.vector_store:
+        console.print("[yellow]Vector memory store not configured[/yellow]")
+        return
+
+    try:
+        results = app.vector_store.search(query, limit=5)
+        if not results:
+            console.print(f"[yellow]No memory matches found for '{query}'[/yellow]")
+            return
+
+        table = Table(title=f"Vector Memory Search: '{query}'")
+        table.add_column("Score", style="cyan")
+        table.add_column("Memory Content", style="white")
+
+        for r in results:
+            score = f"{r.get('score', 0):.2f}" if 'score' in r else "N/A"
+            text = r.get("text", str(r))[:120]
+            table.add_row(score, text)
+
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Memory search error: {e}[/red]")
 
 
 async def _show_resources(app: SandboxApp):
