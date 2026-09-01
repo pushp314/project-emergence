@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SandboxEvent } from '../hooks/useEventStream';
 import { DeepAnalytics } from './DeepAnalytics';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { VectorExplorer } from './VectorExplorer';
 
 // ─────────────── Types ───────────────────────────────────────
 interface ToolStep {
@@ -713,6 +714,7 @@ export function CommandCenter({ events, isConnected, clearEvents }: CommandCente
       items: [
         { id: 'analytics', icon: '◈', label: 'Analytics' },
         { id: 'screen',    icon: '▣', label: 'Screen Vision' },
+        { id: 'brain',     icon: '⎈', label: 'Vector Brain' },
       ],
     },
     {
@@ -1046,6 +1048,10 @@ export function CommandCenter({ events, isConnected, clearEvents }: CommandCente
           {activeNav === 'missions' && <MissionsPanel />}
 
           {activeNav === 'analytics' && <DeepAnalytics />}
+
+          {activeNav === 'brain' && (
+            <VectorExplorer />
+          )}
 
           {activeNav === 'screen' && (
             <div className="anim-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: 40 }}>

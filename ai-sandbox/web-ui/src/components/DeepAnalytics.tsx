@@ -18,7 +18,16 @@ export function DeepAnalytics() {
   const [db,      setDb]      = useState<any>(null);
   const [peers,   setPeers]   = useState<any[]>([]);
   const [sessions,setSessions]= useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const fetchMetrics = useCallback(async () => {
+    try {
+      const r = await fetch('http://localhost:8001/api/analytics/metrics');
+      const d = await r.json();
+      if (d.success) setMetrics(d);
+    } catch (e) {}
+  }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -41,6 +50,12 @@ export function DeepAnalytics() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 2000);
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
+
   const tabs: { id: Section; label: string }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'models',   label: 'Models'   },
@@ -51,8 +66,8 @@ export function DeepAnalytics() {
 
   const overview_stats = [
     { label: 'Active Tools',    value: tools.filter(t => t.enabled).length, total: tools.length,   accent: 'var(--blue-400)' },
-    { label: 'Vector Memories', value: memory?.vector_store_entries ?? '—',  total: null,           accent: 'var(--violet-light)' },
-    { label: 'Turn Number',     value: memory?.turn ?? '—',                  total: null,           accent: 'var(--text-secondary)' },
+    { label: 'Vector Memories', value: metrics?.database?.total_vector_memories ?? (memory?.vector_store_entries ?? '—'),  total: null,           accent: 'var(--violet-light)' },
+    { label: 'Autonomous Sessions', value: metrics?.database?.total_sessions ?? sessions.length, total: null,           accent: 'var(--text-secondary)' },
     { label: 'A2A Peers',       value: peers.length,                         total: null,           accent: 'var(--blue-400)' },
     { label: 'Model Routes',    value: Object.keys(models).length,           total: null,           accent: 'var(--text-secondary)' },
     { label: 'DB Size',         value: db?.file_size_kb ? `${db.file_size_kb}kb` : '—', total: null, accent: 'var(--text-secondary)' },
@@ -109,6 +124,41 @@ export function DeepAnalytics() {
         {/* OVERVIEW */}
         {section === 'overview' && (
           <div>
+            {metrics?.system && (
+              <div style={{ marginBottom: 24, display: 'flex', gap: 16 }}>
+                <div className="card" style={{ flex: 1, padding: 16, borderRadius: 'var(--r-lg)' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    CPU Usage
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--blue-400)', lineHeight: 1 }}>
+                      {metrics.system.cpu_percent.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12, height: 6, background: 'var(--bg-root)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: 'var(--blue-500)', width: `${metrics.system.cpu_percent}%`, transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+                
+                <div className="card" style={{ flex: 1, padding: 16, borderRadius: 'var(--r-lg)' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    RAM Usage
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--violet-light)', lineHeight: 1 }}>
+                      {metrics.system.ram_percent.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', paddingBottom: 4 }}>
+                      {metrics.system.ram_used_gb} / {metrics.system.ram_total_gb} GB
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12, height: 6, background: 'var(--bg-root)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: 'var(--violet-500)', width: `${metrics.system.ram_percent}%`, transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 24 }}>
               {overview_stats.map(s => (
                 <div key={s.label} className="stat-card">

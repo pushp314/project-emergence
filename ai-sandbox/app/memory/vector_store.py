@@ -98,3 +98,35 @@ class VectorMemoryStore:
     async def query_memories_async(self, query: str, n_results: int = 5, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Async wrapper for query_memories."""
         return await asyncio.to_thread(self.query_memories, query, n_results, where)
+
+    def delete_memory(self, memory_id: str) -> bool:
+        """Deletes a memory by ID."""
+        try:
+            self.collection.delete(ids=[memory_id])
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete memory {memory_id}: {e}")
+            return False
+
+    async def delete_memory_async(self, memory_id: str) -> bool:
+        return await asyncio.to_thread(self.delete_memory, memory_id)
+        
+    def get_all_memories(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Fetch all memories with pagination."""
+        try:
+            results = self.collection.get(limit=limit, offset=offset)
+            memories = []
+            if results and 'documents' in results and results['documents']:
+                for i in range(len(results['documents'])):
+                    memories.append({
+                        "id": results['ids'][i],
+                        "content": results['documents'][i],
+                        "metadata": results['metadatas'][i] if results['metadatas'] else {}
+                    })
+            return memories
+        except Exception as e:
+            logger.error(f"Failed to get all memories: {e}")
+            return []
+            
+    async def get_all_memories_async(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        return await asyncio.to_thread(self.get_all_memories, limit, offset)

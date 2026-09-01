@@ -198,9 +198,55 @@ def create_app(config_path: str = "./config.yaml") -> FastAPI:
                 results = sandbox.vector_store.search(query, limit=limit)
                 return {"results": results}
             except Exception as e:
-                return {"error": str(e), "results": []}
+                return {"results": [], "error": str(e)}
+        return {"results": [], "error": "Vector store not initialized or empty query"}
 
-        return {"results": [], "message": "Vector store not configured"}
+    @app.get("/api/analytics/metrics")
+    async def get_analytics_metrics(request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        import psutil
+        try:
+            # System stats
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            ram = psutil.virtual_memory()
+            ram_percent = ram.percent
+            
+            # DB stats
+            total_sessions = 0
+            total_memories = sandbox.vector_store.collection.count() if sandbox.vector_store else 0
+            
+            if sandbox.session_manager:
+                with sandbox.session_manager._get_conn() as conn:
+                    row = conn.execute("SELECT COUNT(*) as c FROM session_metadata").fetchone()
+                    if row:
+                        total_sessions = row["c"]
+            
+            return {
+                "success": True,
+                "system": {
+                    "cpu_percent": cpu_percent,
+                    "ram_percent": ram_percent,
+                    "ram_used_gb": round(ram.used / (1024**3), 2),
+                    "ram_total_gb": round(ram.total / (1024**3), 2)
+                },
+                "database": {
+                    "total_sessions": total_sessions,
+                    "total_vector_memories": total_memories
+                }
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    @app.delete("/api/memory/vectors/{memory_id}")
+    async def delete_vector(memory_id: str, request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        if sandbox.vector_store:
+            try:
+                success = await sandbox.vector_store.delete_memory_async(memory_id)
+                return {"success": success}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Vector store not initialized"}
 
     @app.get("/api/evidence")
     async def get_evidence(request: Request):
