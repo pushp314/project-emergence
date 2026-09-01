@@ -1,0 +1,41 @@
+[
+  {
+    "job_id": "job_14b46d03",
+    "name": "Telemetry & System Health Check",
+    "task_prompt": "Inspect Mac CPU, RAM, and battery status. If RAM > 85%, log an alert.",
+    "interval_seconds": 900,
+    "is_active": false,
+    "created_at": "2026-08-31T18:36:01.132886+00:00",
+    "last_run_at": null,
+    "next_run_at": null,
+    "run_count": 0,
+    "last_status": "pending",
+    "last_result_summary": ""
+  },
+  {
+    "job_id": "job_1ae1016a",
+    "name": "Autonomous Research & Gap Discovery",
+    "task_prompt": "Analyze previous research history, discover 1 novel unexplored frontier, synthesize paper and publish to Desktop.",
+    "interval_seconds": 3600,
+    "is_active": true,
+    "created_at": "2026-08-31T18:36:01.133349+00:00",
+    "last_run_at": "2026-09-01T16:25:50.996017+00:00",
+    "next_run_at": null,
+    "run_count": 16,
+    "last_status": "completed",
+    "last_result_summary": "### Task Completion Report: Unexplored Frontier in ZKP and SLMs\n\nI have successfully analyzed the previous research history and identified a critical, unexplored frontier: **The application of Zero-Knowledge Proofs (ZKP) to verify the provenance and authenticity of synthetic training data for Small "
+  },
+  {
+    "job_id": "job_796f476a",
+    "name": "Mac RAM & CPU Watcher",
+    "task_prompt": "Check Mac RAM and CPU telemetry. Output summary.",
+    "interval_seconds": 600,
+    "is_active": false,
+    "created_at": "2026-08-31T18:36:17.643733+00:00",
+    "last_run_at": "2026-08-31T20:17:58.672723+00:00",
+    "next_run_at": null,
+    "run_count": 11,
+    "last_status": "completed",
+    "last_result_summary": "### Mac System Telemetry Summary\n\nAs of 2026/09/01 01:48:00, here is the current system performance snapshot:\n\n#### **CPU Usage**\n- **User:** 18.1%\n- **System:** 12.73%\n- **Idle:** 69.25%\n- **Load Average:** 3.48, 2.93, 2.86\n\n#### **Memory (RAM) Usage**\n- **Total Used:** 15 GB\n- **Unused:** 684 MB\n-"
+  }
+]

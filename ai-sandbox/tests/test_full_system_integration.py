@@ -63,6 +63,43 @@ Done!'''
         self.assertEqual(calls3[0][0], "terminal")
         self.assertEqual(calls3[1][0], "system")
 
+    async def test_a2a_protocol_registration(self):
+        from app.a2a.protocol import A2AProtocol, AgentCard
+        from app.events.bus import EventBus
+        bus = EventBus()
+        a2a = A2AProtocol(event_bus=bus)
+        card = AgentCard(agent_id="test_agent", name="Test Agent", description="Test", capabilities=["test"])
+        a2a.register_peer(card)
+        self.assertEqual(len(a2a.list_peers()), 1)
+        self.assertEqual(a2a.get_peer("test_agent").name, "Test Agent")
+
+    async def test_research_manager_caching(self):
+        from app.research.manager import ResearchManager
+        class MockWebTool:
+            async def execute(self, args):
+                if args.get("operation") == "search":
+                    return {
+                        "status": "success",
+                        "results": [
+                            {"title": "AI Sandbox Overview", "url": "https://example.com/sandbox", "snippet": "A test sandbox."}
+                        ]
+                    }
+                return {"status": "success", "text": "Extracted article text for AI sandbox testing."}
+
+        manager = ResearchManager(web_tool=MockWebTool())
+        session = await manager.research(
+            agent_id="researcher",
+            question="What is an AI sandbox?",
+            max_sources=2
+        )
+        self.assertEqual(session.status, "completed")
+        self.assertTrue(len(session.sources) > 0)
+
+        # Test caching
+        cached = manager.get_cached_research("What is an AI sandbox?")
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached.research_id, session.research_id)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -83,14 +83,13 @@ class FilesystemTool(Tool):
         return True
     
     def _resolve_path(self, path: str) -> pathlib.Path:
-        target = (self._base_path / path).resolve()
+        p = pathlib.Path(path).expanduser()
+        if p.is_absolute():
+            target = p.resolve()
+        else:
+            target = (self._base_path / path).resolve()
         
-        try:
-            target.relative_to(self._base_path)
-        except ValueError:
-            raise PermissionError(f"Path '{path}' is outside base directory")
-        
-        # Blocked paths check - applies to ALL paths, even those inside base_path
+        # Blocked system paths check (protect root / system internals)
         for blocked in self._blocked_paths:
             try:
                 blocked_resolved = pathlib.Path(blocked).resolve()

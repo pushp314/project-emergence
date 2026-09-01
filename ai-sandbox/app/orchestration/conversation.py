@@ -87,6 +87,17 @@ class ConversationEngine:
         logger.critical("EMERGENCY STOP RECEIVED - Halting conversation immediately")
         self._shutdown_requested = True
         self.state_machine.shutdown()
+
+    def reset(self, new_conversation_id: Optional[str] = None) -> None:
+        """Reset the engine state for a new or existing session."""
+        if new_conversation_id:
+            self.config.conversation_id = new_conversation_id
+        self._message_history.clear()
+        self.scheduler.turn_number = 0
+        self.state_machine = StateMachine()
+        self._shutdown_requested = False
+        # Optional: reset scheduler speaker state if needed
+        # self.scheduler._current_speaker = self.config.initial_speaker
     
     @property
     def conversation_id(self) -> str:

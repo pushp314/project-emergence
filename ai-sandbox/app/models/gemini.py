@@ -11,6 +11,14 @@ from app.models.key_pool import APIKeyPool, AllKeysRateLimitedError
 
 logger = logging.getLogger(__name__)
 
+# Verified active models available on Gemini Developer API
+GEMINI_FALLBACK_MODELS = [
+    "gemini-3.1-flash-lite-preview",
+    "gemma-4-31b-it",
+    "gemma-4-26b-a4b-it",
+    "gemini-2.5-flash"
+]
+
 
 class GeminiAdapter(ModelAdapter):
     def __init__(
@@ -79,55 +87,59 @@ class GeminiAdapter(ModelAdapter):
         start = time.time()
         max_retries = max(1, self._pool.total_keys)
 
+        candidate_models = [self._config.name] + [m for m in GEMINI_FALLBACK_MODELS if m != self._config.name]
+
         for attempt in range(max_retries):
             current_key = self._pool.get_next_key()
-            url = f"{self._base}/models/{self._config.name}:generateContent?key={current_key}"
-            try:
-                resp = await client.post(url, json=self._build_body(request))
-                
-                # Check for rate limits
-                if resp.status_code == 429:
-                    error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-                    logger.warning(
-                        f"Gemini API key rate limited (429). Rotating key... ({error_data.get('error', {}).get('message', '')[:100]})"
+            
+            for model_name in candidate_models:
+                url = f"{self._base}/models/{model_name}:generateContent?key={current_key}"
+                try:
+                    resp = await client.post(url, json=self._build_body(request))
+                    
+                    # If specific model is 404 (unavailable/deprecated) or 429 quota reached, try other model in family
+                    if resp.status_code in (404, 429):
+                        logger.warning(
+                            f"Gemini model '{model_name}' returned status {resp.status_code}. Checking alternative Gemini models..."
+                        )
+                        continue
+
+                    if resp.status_code != 200:
+                        logger.warning(f"Gemini API error ({resp.status_code}): {resp.text[:150]}")
+                        continue
+
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        continue
+
+                    candidate = candidates[0]
+                    content = candidate.get("content", {})
+                    parts = content.get("parts", []) if isinstance(content, dict) else []
+                    text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
+                    if not text:
+                        text = candidate.get("finishReason", "")
+                    
+                    self._pool.mark_success(current_key)
+                    return GenerationResponse(
+                        text=text,
+                        tokens_generated=data.get("usageMetadata", {}).get("candidatesTokenCount", 0),
+                        finish_reason=candidate.get("finishReason", "STOP"),
+                        latency_ms=(time.time() - start) * 1000,
+                        model=model_name,
                     )
-                    self._pool.mark_rate_limited(current_key, cooldown_seconds=30.0)
+                except httpx.TimeoutException:
+                    logger.warning(f"Gemini request for '{model_name}' timed out. Trying next model...")
+                    continue
+                except Exception as e:
+                    logger.warning(f"Gemini error with '{model_name}': {e}")
                     continue
 
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    raise RuntimeError(f"No candidates returned by Gemini: {data}")
-                candidate = candidates[0]
-                content = candidate.get("content", {})
-                parts = content.get("parts", []) if isinstance(content, dict) else []
-                text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
-                if not text:
-                    text = candidate.get("finishReason", "")
-                
-                self._pool.mark_success(current_key)
-                return GenerationResponse(
-                    text=text,
-                    tokens_generated=data.get("usageMetadata", {}).get("candidatesTokenCount", 0),
-                    finish_reason=candidate.get("finishReason", "STOP"),
-                    latency_ms=(time.time() - start) * 1000,
-                    model=self._config.name,
-                )
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    self._pool.mark_rate_limited(current_key, cooldown_seconds=30.0)
-                    if attempt < max_retries - 1:
-                        continue
-                raise
-            except Exception as e:
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                    self._pool.mark_rate_limited(current_key, cooldown_seconds=30.0)
-                    if attempt < max_retries - 1:
-                        continue
-                raise
+            # If all candidate models for this key failed due to rate limiting
+            self._pool.mark_rate_limited(current_key, cooldown_seconds=30.0)
 
         # If loop finishes without returning, trigger key pool exhaustion error
-        raise AllKeysRateLimitedError("All Gemini keys in pool have been exhausted", cooldown_remaining=30.0)
+        raise AllKeysRateLimitedError("All Gemini keys and model variants have been exhausted", cooldown_remaining=30.0)
 
     async def generate_stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         result = await self.generate(request)
@@ -139,25 +151,23 @@ class GeminiAdapter(ModelAdapter):
             current_key = self._pool.get_next_key()
             url = f"{self._base}/models/{self._config.name}:countTokens?key={current_key}"
             resp = await client.post(url, json={"contents": [{"parts": [{"text": text}]}]})
-            return resp.json().get("totalTokens", len(text) // 4)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("totalTokens", len(text) // 4)
         except Exception:
-            return len(text) // 4
+            pass
+        return len(text) // 4
 
     async def health_check(self) -> bool:
-        try:
-            await self.count_tokens("ping")
-            return True
-        except Exception:
-            return False
+        return self._pool.has_active_keys()
 
-    def get_model_info(self) -> dict:
-        info = {
+    def get_model_info(self) -> Dict[str, Any]:
+        return {
             "name": self._config.name,
             "backend": "gemini",
             "context_window": self._config.context_window,
-            "key_pool": self._pool.get_status()
+            "key_pool": self._pool.get_status(),
         }
-        return info
 
     async def close(self) -> None:
         if self._client:

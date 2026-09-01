@@ -2,14 +2,14 @@ model:
   routes:
     default:
       provider: gemini
-      name: "gemini-2.5-flash"
+      name: "gemini-3.1-flash-lite-preview"
       context_window: 1000000
       fallbacks:
         - openrouter_route
         - local_ollama
     openrouter_route:
       provider: openrouter
-      name: "google/gemma-4-31b-it:free"
+      name: "deepseek/deepseek-chat"
       context_window: 262144
       fallback: local_ollama
     local_ollama:
@@ -20,19 +20,19 @@ model:
       auto_detect: true
     planning:
       provider: gemini
-      name: "gemini-2.5-flash"
+      name: "gemma-4-31b-it"
       context_window: 1000000
       fallbacks:
         - openrouter_route
         - local_ollama
     critical_review:
       provider: openrouter
-      name: "anthropic/claude-sonnet-4.5"
+      name: "deepseek/deepseek-chat"
       context_window: 200000
       fallback: openrouter_route
     observer:
       provider: gemini
-      name: "gemini-2.5-flash"
+      name: "gemini-3.1-flash-lite-preview"
       context_window: 1000000
       fallbacks:
         - openrouter_route

@@ -234,7 +234,15 @@ async def _handle_command(app: SandboxApp, command: str):
     elif cmd in ("/memory", "/m"):
         await _show_memory(app)
     elif cmd in ("/research", "/r"):
-        await _show_research(app)
+        query = " ".join(args)
+        if query:
+            await _run_research_cli(app, query)
+        else:
+            await _show_research(app)
+    elif cmd in ("/gaps", "/discover", "/unexplored"):
+        await _show_research_gaps(app)
+    elif cmd in ("/peers", "/agents", "/cards"):
+        await _show_peers(app)
     elif cmd in ("/evidence", "/e"):
         await _show_evidence(app)
     elif cmd in ("/experiments", "/ex"):
@@ -579,6 +587,99 @@ async def _show_memory(app: SandboxApp):
                         title="Memory", border_style="cyan"))
 
 
+async def _run_research_cli(app: SandboxApp, query: str):
+    if not app.research_manager:
+        console.print("[red]ResearchManager not initialized[/red]")
+        return
+    with console.status(f"[bold cyan]🔬 Conducting deep autonomous research & synthesis on '{query}'...[/bold cyan]"):
+        try:
+            session = await app.research_manager.research(
+                agent_id="operator",
+                question=query,
+                reason=f"CLI operator research: {query}",
+                max_sources=4,
+                export_desktop=True
+            )
+            console.print(f"[green]✓ Autonomous Deep Research Completed:[/green] [bold white]{session.question}[/bold white]")
+            console.print(f"  Status: [cyan]{session.status}[/cyan] | Sources: [yellow]{len(session.sources)}[/yellow] | Claims: [magenta]{len(session.claims)}[/magenta]")
+            
+            desktop_path = session.metadata.get("desktop_path")
+            if desktop_path:
+                console.print(f"  📁 [bold green]Published to Desktop:[/bold green] [bold white underline]{desktop_path}[/bold white underline]")
+
+            report_path = session.metadata.get("report_path")
+            if report_path and Path(report_path).exists():
+                with open(report_path, encoding="utf-8") as f:
+                    content = f.read()
+                preview = content[:1200] + ("\n\n... [Full Report on Desktop]" if len(content) > 1200 else "")
+                console.print(Panel(preview, title="🔬 Research Paper Preview", border_style="green"))
+
+            for sid in session.sources:
+                s = app.research_manager.get_source(sid)
+                if s:
+                    console.print(f"  • [blue]{s.title}[/blue] ({s.url})")
+        except Exception as e:
+            console.print(f"[red]Research failed: {e}[/red]")
+
+
+async def _show_research_gaps(app: SandboxApp):
+    if not app.research_manager:
+        console.print("[red]ResearchManager not initialized[/red]")
+        return
+    with console.status("[bold magenta]🔭 Analyzing previous research coverage and discovering unexplored gaps...[/bold magenta]"):
+        try:
+            data = await app.research_manager.discover_unexplored_gaps(limit=5)
+            gaps = data.get("recommended_gaps", [])
+            if not gaps:
+                console.print("[yellow]No new research gaps found[/yellow]")
+                return
+
+            table = Table(title=f"🔭 Unexplored Research Frontiers (Analyzed {data.get('analyzed_previous_topics_count', 0)} Past Sessions)")
+            table.add_column("#", style="cyan", width=3)
+            table.add_column("Category", style="yellow", width=14)
+            table.add_column("Novel Research Topic", style="bold white", width=36)
+            table.add_column("Impact", style="bold green", width=8)
+            table.add_column("Rationale & Gap", style="white")
+
+            for i, gap in enumerate(gaps):
+                impact_style = "green" if gap.get("impact") == "HIGH" else "yellow"
+                table.add_row(
+                    str(i + 1),
+                    gap.get("category", "General"),
+                    gap.get("topic", "N/A"),
+                    f"[{impact_style}]{gap.get('impact', 'MED')}[/{impact_style}]",
+                    f"{gap.get('rationale', '')} [italic dim]({gap.get('unexplored_aspect', '')})[/italic dim]"
+                )
+
+            console.print(table)
+            console.print("[dim cyan]Tip: Run `/research <topic>` to immediately launch autonomous research on any novel gap.[/dim cyan]")
+        except Exception as e:
+            console.print(f"[red]Gap discovery failed: {e}[/red]")
+
+
+async def _show_peers(app: SandboxApp):
+    if not app.a2a_protocol:
+        console.print("[yellow]A2A Protocol not initialized[/yellow]")
+        return
+    peers = app.a2a_protocol.list_peers()
+    if not peers:
+        console.print("[yellow]No A2A peers registered[/yellow]")
+        return
+    table = Table(title="A2A Protocol Registered Agent Cards")
+    table.add_column("Agent ID", style="cyan")
+    table.add_column("Name", style="bold white")
+    table.add_column("Description", style="white")
+    table.add_column("Capabilities", style="yellow")
+    for p in peers:
+        table.add_row(
+            p.agent_id,
+            p.name,
+            p.description,
+            ", ".join(p.capabilities)
+        )
+    console.print(table)
+
+
 async def _show_research(app: SandboxApp):
     evidence_mgr = app.evidence_manager
     research = evidence_mgr.get_session_evidence(
@@ -804,13 +905,14 @@ async def _search_memory_cli(app: SandboxApp, query: str):
             return
 
         table = Table(title=f"Vector Memory Search: '{query}'")
-        table.add_column("Score", style="cyan")
-        table.add_column("Memory Content", style="white")
+        table.add_column("Memory ID", style="cyan")
+        table.add_column("Distance", style="yellow")
+        table.add_column("Content Preview", style="white")
 
         for r in results:
-            score = f"{r.get('score', 0):.2f}" if 'score' in r else "N/A"
-            text = r.get("text", str(r))[:120]
-            table.add_row(score, text)
+            dist = f"{r.get('distance', 0):.3f}" if r.get('distance') is not None else "N/A"
+            text = r.get("content") or r.get("text") or str(r)
+            table.add_row(r.get("id", "")[:12], dist, text[:120])
 
         console.print(table)
     except Exception as e:
@@ -892,8 +994,19 @@ async def _show_timeline(app: SandboxApp):
 
 async def _generate_report(app: SandboxApp):
     try:
-        report_path = app.session_manager.generate_final_report(app.conversation_engine.conversation_id)
-        console.print(f"[green]Report generated: {report_path}[/green]")
+        from app.reports.generator import ReportGenerator
+        generator = ReportGenerator(
+            evidence_manager=app.evidence_manager,
+            session_manager=app.session_manager
+        )
+        report_path = generator.generate_final_report(
+            app.conversation_engine.conversation_id if app.conversation_engine else None
+        )
+        console.print(f"[green]✓ Report generated successfully:[/green] [bold white]{report_path}[/bold white]")
+        if Path(report_path).exists():
+            with open(report_path) as f:
+                content = f.read()
+            console.print(Panel(content[:1500] + ("\n..." if len(content) > 1500 else ""), title="Session Report Preview", border_style="green"))
     except Exception as e:
         console.print(f"[red]Error generating report: {e}[/red]")
 

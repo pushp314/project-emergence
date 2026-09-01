@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
@@ -10,12 +11,14 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPExcept
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.main import SandboxApp
+from app.events.bus import EventType
 
 logger = logging.getLogger(__name__)
 
 # --- Models ---
 class ChatMessage(BaseModel):
     message: str
+    mode: Optional[str] = "24/7"
 
 class ApprovalResponse(BaseModel):
     success: bool
@@ -34,10 +37,18 @@ async def lifespan(app: FastAPI):
     
     # Automatically start un-paused
     await sandbox.conversation_engine.resume()
+
+    # Start 24/7 Standing Daemon Scheduler
+    from app.orchestration.daemon_scheduler import get_daemon_scheduler
+    daemon_sched = get_daemon_scheduler()
+    daemon_sched.event_bus = sandbox.event_bus
+    await daemon_sched.start()
+    app.state.daemon_scheduler = daemon_sched
     
     yield
     
     # Shutdown
+    await daemon_sched.stop()
     await sandbox.shutdown()
     app.state.engine_task.cancel()
     try:
@@ -212,6 +223,96 @@ def create_app(config_path: str = "./config.yaml") -> FastAPI:
             except Exception as e:
                 return {"sessions": [], "error": str(e)}
         return {"sessions": []}
+
+    @app.post("/api/sessions")
+    async def create_session(request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        if sandbox.session_manager and sandbox.conversation_engine:
+            try:
+                # Generate a new session ID
+                new_session_id = str(uuid.uuid4())
+                # Reset engine to new session
+                sandbox.conversation_engine.reset(new_session_id)
+                
+                # We need to recreate the session config using the new ID. 
+                # Normally the manager does this on start, but we can just use the engine's config
+                from app.sessions.manager import SessionConfig
+                config = SessionConfig(
+                    session_id=new_session_id,
+                    initial_speaker=sandbox.conversation_engine.config.initial_speaker
+                )
+                session = await sandbox.session_manager.create_session(config)
+                
+                return {"success": True, "session_id": new_session_id, "session": session.__dict__}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Session manager not available"}
+
+    @app.post("/api/sessions/{session_id}/switch")
+    async def switch_session(session_id: str, request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        if sandbox.session_manager and sandbox.conversation_engine:
+            try:
+                # Pause current if running
+                if sandbox.conversation_engine.is_running:
+                    await sandbox.conversation_engine.pause()
+                    
+                # Reset the engine state to the target session ID
+                sandbox.conversation_engine.reset(session_id)
+                
+                # Check if session exists in DB
+                session_info = sandbox.session_manager.get_session_info(session_id)
+                if not session_info:
+                    return {"success": False, "error": "Session not found"}
+                
+                # Update current session in manager
+                # Since we don't have a perfect "switch_session" in SessionManager, 
+                # we just use recover_session which achieves the same thing by loading state
+                await sandbox.session_manager.recover_session(session_id)
+                
+                return {"success": True, "session_id": session_id}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Session manager not available"}
+
+    @app.delete("/api/sessions/{session_id}")
+    async def delete_session(session_id: str, request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        if sandbox.session_manager:
+            try:
+                success = await sandbox.session_manager.delete_session(session_id)
+                return {"success": success}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Session manager not available"}
+
+    @app.get("/api/sessions/{session_id}/messages")
+    async def get_session_messages(session_id: str, request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        try:
+            # We fetch evidence of type human_message and agent_message for this session
+            evidence_manager = sandbox.session_manager.evidence_manager
+            # We can use get_session_evidence or we could just filter timeline
+            timeline = evidence_manager.get_timeline(session_id=session_id)
+            messages = []
+            
+            for item in timeline:
+                event_type = item.get("event_type")
+                if event_type in ["agent.message", "human.message.processed"]:
+                    payload = item.get("payload", {})
+                    # Format matching our frontend Message interface
+                    messages.append({
+                        "id": str(item.get("evidence_id")),
+                        "sender": "user" if event_type == "human.message.processed" else "agent",
+                        "content": payload.get("content", ""),
+                        "thought": payload.get("thought"),
+                        "model": payload.get("model"),
+                        "timestamp": item.get("timestamp")
+                    })
+            
+            return {"messages": messages}
+        except Exception as e:
+            return {"messages": [], "error": str(e)}
 
     @app.get("/api/modifications")
     async def get_modifications(request: Request):
@@ -425,12 +526,13 @@ def create_app(config_path: str = "./config.yaml") -> FastAPI:
     @app.post("/api/research")
     async def run_research(req: Dict[str, Any], request: Request):
         sandbox: SandboxApp = request.app.state.sandbox
-        question = req.get("question") or req.get("query")
+        question = req.get("question") or req.get("query") or req.get("topic")
         if not question:
-            raise HTTPException(status_code=400, detail="question is required")
+            raise HTTPException(status_code=400, detail="question or topic is required")
         
         agent_id = req.get("agent_id", "researcher")
         max_sources = req.get("max_sources", 5)
+        export_desktop = req.get("export_desktop", True)
 
         if not sandbox.research_manager:
             raise HTTPException(status_code=500, detail="Research manager not available")
@@ -440,7 +542,8 @@ def create_app(config_path: str = "./config.yaml") -> FastAPI:
                 agent_id=agent_id,
                 question=question,
                 reason=f"Operator requested research on: {question}",
-                max_sources=max_sources
+                max_sources=max_sources,
+                export_desktop=export_desktop
             )
             return {
                 "success": True,
@@ -449,7 +552,54 @@ def create_app(config_path: str = "./config.yaml") -> FastAPI:
                 "status": session.status,
                 "sources_count": len(session.sources),
                 "claims_count": len(session.claims),
-                "conclusion": session.conclusion
+                "conclusion": session.conclusion,
+                "report_path": session.metadata.get("report_path", ""),
+                "desktop_path": session.metadata.get("desktop_path", ""),
+                "summary": session.metadata.get("summary", "")
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    @app.get("/api/research/gaps")
+    async def get_research_gaps(request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        if not sandbox.research_manager:
+            raise HTTPException(status_code=500, detail="Research manager not available")
+        try:
+            data = await sandbox.research_manager.discover_unexplored_gaps(limit=5)
+            return {"success": True, **data}
+        except Exception as e:
+            return {"success": False, "error": str(e), "recommended_gaps": []}
+
+    @app.post("/api/research/discover")
+    async def auto_discover_and_research(req: Dict[str, Any], request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        if not sandbox.research_manager:
+            raise HTTPException(status_code=500, detail="Research manager not available")
+        try:
+            gaps_data = await sandbox.research_manager.discover_unexplored_gaps(limit=1)
+            recommended = gaps_data.get("recommended_gaps", [])
+            if not recommended:
+                raise HTTPException(status_code=404, detail="No new research gaps found")
+            
+            top_gap = recommended[0]
+            topic = top_gap.get("topic")
+            
+            session = await sandbox.research_manager.research(
+                agent_id="researcher",
+                question=topic,
+                reason=f"Autonomous gap discovery: {top_gap.get('rationale', '')}",
+                max_sources=5,
+                export_desktop=True
+            )
+            return {
+                "success": True,
+                "discovered_topic": topic,
+                "gap_metadata": top_gap,
+                "research_id": session.research_id,
+                "status": session.status,
+                "desktop_path": session.metadata.get("desktop_path", ""),
+                "summary": session.metadata.get("summary", "")
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -476,8 +626,141 @@ def create_app(config_path: str = "./config.yaml") -> FastAPI:
     @app.post("/api/chat")
     async def chat(msg: ChatMessage, request: Request):
         sandbox: SandboxApp = request.app.state.sandbox
-        await sandbox.conversation_engine.inject_human_message(msg.message)
-        return {"success": True}
+        from app.agents.system_controller import get_mac_controller
+        controller = get_mac_controller()
+        controller.tool_gateway = sandbox.tool_gateway
+        controller.event_bus = sandbox.event_bus
+
+        # Publish human message event
+        await sandbox.event_bus.publish_type(
+            EventType.HUMAN_MESSAGE,
+            sandbox.conversation_engine.conversation_id,
+            {"content": msg.message}
+        )
+
+        # Execute autonomously on Mac system
+        try:
+            result = await controller.execute_task(
+                task=msg.message,
+                conversation_id=sandbox.conversation_engine.conversation_id,
+                mode="24/7"
+            )
+            return {"success": True, **result}
+        except Exception as e:
+            logger.error(f"MacSystemController error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    @app.post("/api/agent/execute")
+    async def agent_execute(req: Dict[str, Any], request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        task = req.get("task") or req.get("message")
+        if not task:
+            raise HTTPException(status_code=400, detail="task is required")
+        
+        mode = req.get("mode", "24/7")
+        from app.agents.system_controller import get_mac_controller
+        controller = get_mac_controller()
+        controller.tool_gateway = sandbox.tool_gateway
+        controller.event_bus = sandbox.event_bus
+
+        result = await controller.execute_task(
+            task=task,
+            conversation_id=sandbox.conversation_engine.conversation_id,
+            mode=mode
+        )
+        return {"success": True, **result}
+
+    @app.post("/api/vision/screen")
+    async def inspect_screen(req: Dict[str, Any], request: Request):
+        sandbox: SandboxApp = request.app.state.sandbox
+        prompt = req.get("prompt", "Analyze what is currently open on my Mac screen, identify active applications, code, or any visual errors, and provide a helpful summary.")
+        
+        # 1. Take screenshot using tool
+        vision_tool = sandbox.tool_gateway.get_tool("screenshot")
+        if not vision_tool:
+            raise HTTPException(status_code=500, detail="Vision/Screenshot tool not available")
+        
+        snap_res = await vision_tool.execute({})
+        if not snap_res.get("success"):
+            return {"success": False, "error": snap_res.get("error", "Screenshot capture failed")}
+        
+        base64_img = snap_res.get("image_base64")
+        file_path = snap_res.get("file_path")
+        
+        # 2. Multimodal LLM analysis
+        try:
+            from app.models.base import get_model_registry, GenerationRequest
+            registry = get_model_registry()
+            model = registry.get("default")
+            
+            gen_req = GenerationRequest(
+                prompt=f"{prompt}\n[Attached: Base64 macOS Screen Capture]",
+                system_prompt="You are an expert macOS Vision Assistant. Examine the user's screen capture, interpret all visual context accurately, and provide a clear, concise breakdown.",
+                images=[base64_img] if base64_img else [],
+                temperature=0.3,
+                max_tokens=2000
+            )
+            response = await model.generate(gen_req)
+            analysis_text = response.text.strip()
+            
+            # Emit event to WebSocket
+            await sandbox.event_bus.publish_type(
+                EventType.AGENT_MESSAGE,
+                sandbox.conversation_engine.conversation_id,
+                {"content": analysis_text, "screenshot_path": file_path}
+            )
+            
+            return {
+                "success": True,
+                "analysis": analysis_text,
+                "screenshot_path": file_path,
+                "image_base64": base64_img[:500] + "..." if base64_img else None,
+                "timestamp": snap_res.get("timestamp")
+            }
+        except Exception as e:
+            logger.error(f"Vision analysis failed: {e}", exc_info=True)
+            return {
+                "success": True,
+                "analysis": f"Screenshot captured successfully at `{file_path}`. (Vision model note: {e})",
+                "screenshot_path": file_path
+            }
+
+    @app.get("/api/scheduler/jobs")
+    async def get_scheduled_jobs():
+        from app.orchestration.daemon_scheduler import get_daemon_scheduler
+        sched = get_daemon_scheduler()
+        return {"success": True, "jobs": sched.list_jobs()}
+
+    @app.post("/api/scheduler/jobs")
+    async def add_scheduled_job(req: Dict[str, Any]):
+        name = req.get("name", "Standing Autonomous Mission")
+        task_prompt = req.get("task_prompt", "")
+        interval_seconds = req.get("interval_seconds", 900)
+        is_active = req.get("is_active", True)
+        
+        if not task_prompt:
+            raise HTTPException(status_code=400, detail="task_prompt is required")
+        
+        from app.orchestration.daemon_scheduler import get_daemon_scheduler
+        sched = get_daemon_scheduler()
+        job = sched.add_job(name, task_prompt, interval_seconds, is_active)
+        return {"success": True, "job": job.__dict__ if hasattr(job, "__dict__") else job}
+
+    @app.post("/api/scheduler/jobs/{job_id}/toggle")
+    async def toggle_scheduled_job(job_id: str):
+        from app.orchestration.daemon_scheduler import get_daemon_scheduler
+        sched = get_daemon_scheduler()
+        job = sched.toggle_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return {"success": True, "job": job.__dict__ if hasattr(job, "__dict__") else job}
+
+    @app.delete("/api/scheduler/jobs/{job_id}")
+    async def delete_scheduled_job(job_id: str):
+        from app.orchestration.daemon_scheduler import get_daemon_scheduler
+        sched = get_daemon_scheduler()
+        deleted = sched.delete_job(job_id)
+        return {"success": deleted}
 
     @app.post("/api/start")
     async def start_engine(request: Request):

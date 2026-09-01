@@ -711,7 +711,7 @@ class EvidenceManager:
         
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO decisions (decision_id, session_id, agent_id, decision, reason,
+                INSERT OR REPLACE INTO decisions (decision_id, session_id, agent_id, decision, reason,
                                       evidence_considered, alternatives, resulting_action,
                                       timestamp, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -730,7 +730,7 @@ class EvidenceManager:
         
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO artifacts (artifact_id, session_id, agent_id, name, artifact_type,
+                INSERT OR REPLACE INTO artifacts (artifact_id, session_id, agent_id, name, artifact_type,
                                       path, size_bytes, created_by_action, experiment_id,
                                       research_id, created_at, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -749,7 +749,7 @@ class EvidenceManager:
         
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO research_sessions (research_id, session_id, agent_id, question, reason,
+                INSERT OR REPLACE INTO research_sessions (research_id, session_id, agent_id, question, reason,
                                               status, sources, claims, conclusion,
                                               started_at, completed_at, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -768,7 +768,7 @@ class EvidenceManager:
         
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO experiments (experiment_id, session_id, agent_id, objective, hypothesis,
+                INSERT OR REPLACE INTO experiments (experiment_id, session_id, agent_id, objective, hypothesis,
                                         proposed_procedure, required_tools, required_permissions,
                                         status, baseline_reference, result, conclusion,
                                         started_at, completed_at, artifacts, metrics, metadata)
@@ -790,7 +790,7 @@ class EvidenceManager:
         
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO modifications (modification_id, session_id, agent_id, proposal, reason,
+                INSERT OR REPLACE INTO modifications (modification_id, session_id, agent_id, proposal, reason,
                                           hypothesis, expected_benefit, expected_risk, files_affected,
                                           branch, baseline_commit, status, benchmark_before,
                                           benchmark_after, test_results, approval, applied_commit,
@@ -813,7 +813,7 @@ class EvidenceManager:
     def record_source(self, source: Source) -> None:
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO sources (source_id, research_id, url, title, domain, publisher,
+                INSERT OR REPLACE INTO sources (source_id, research_id, url, title, domain, publisher,
                                     retrieved_at, content_reference, content_hash, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -829,7 +829,7 @@ class EvidenceManager:
             
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO intent_action_stages (record_id, session_id, agent_id, correlation_id,
+                INSERT OR REPLACE INTO intent_action_stages (record_id, session_id, agent_id, correlation_id,
                                                  stage, timestamp, content, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -842,7 +842,7 @@ class EvidenceManager:
     def record_claim(self, claim: Claim) -> None:
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO claims (claim_id, research_id, source_id, agent_id, claim, claim_type,
+                INSERT OR REPLACE INTO claims (claim_id, research_id, source_id, agent_id, claim, claim_type,
                                    confidence, verification_status, supporting_evidence,
                                    contradicting_evidence, created_at, verified_at, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -876,15 +876,20 @@ class EvidenceManager:
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
     
-    def get_timeline(self, session_id: Optional[str] = None) -> List[Dict]:
+    def get_timeline(self, session_id: Optional[str] = None, limit: Optional[int] = None) -> List[Dict]:
         sid = session_id or self._session_id
         if not sid:
             return []
         
         with self._get_conn() as conn:
-            rows = conn.execute("""
-                SELECT * FROM evidence WHERE session_id = ? ORDER BY timestamp ASC
-            """, (sid,)).fetchall()
+            if limit:
+                rows = conn.execute("""
+                    SELECT * FROM evidence WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?
+                """, (sid, limit)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT * FROM evidence WHERE session_id = ? ORDER BY timestamp ASC
+                """, (sid,)).fetchall()
             return [dict(row) for row in rows]
     
     def get_session_info(self, session_id: Optional[str] = None) -> Optional[Dict]:

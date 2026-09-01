@@ -80,9 +80,29 @@ class TerminalTool(Tool):
         if not command:
             return {"error": "Empty command", "exit_code": -1, "stdout": "", "stderr": ""}
         
-        allowed, reason = self._is_command_allowed(command)
-        if not allowed:
-            return {"error": f"Command not allowed: {reason}", "exit_code": -1, "stdout": "", "stderr": ""}
+        # Check for High-Risk commands
+        risky_keywords = ["sudo ", "rm ", "kill ", "curl ", "wget "]
+        is_risky = any(kw in command for kw in risky_keywords)
+        
+        if is_risky:
+            from app.permissions.manager import get_permission_manager
+            from app.events.schemas import RiskLevel, PermissionLevel
+            pm = get_permission_manager()
+            pm.timeout_seconds = 300 # 5 minutes timeout
+            
+            conv_id = arguments.get("_conversation_id", "operator")
+            approved = await pm.request_permission(
+                agent_id=conv_id,
+                action="execute_terminal",
+                command=command,
+                reason=f"Attempting to execute high-risk terminal command: {command}",
+                risk=RiskLevel.HIGH,
+                scope=PermissionLevel.EXECUTE
+            )
+            
+            if not approved:
+                return {"error": "Command blocked: User denied permission or request timed out.", "exit_code": -1, "stdout": "", "stderr": "Permission Denied"}
+        
         
         try:
             process = await asyncio.create_subprocess_shell(
@@ -93,9 +113,34 @@ class TerminalTool(Tool):
                 env={**os.environ, "TERM": "dumb"}
             )
             
+            from app.events.bus import get_event_bus, EventType
+            bus = get_event_bus()
+            # Try to get conversation_id from arguments, default to empty
+            conv_id = arguments.get("_conversation_id", "")
+            
+            stdout_data = []
+            stderr_data = []
+            
+            async def read_stream(stream, data_list, is_stderr=False):
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    decoded_line = line.decode("utf-8", errors="replace")
+                    data_list.append(decoded_line)
+                    await bus.publish_type(
+                        EventType.TOOL_STDOUT,
+                        conv_id,
+                        {"tool_name": "terminal", "output": decoded_line, "is_stderr": is_stderr}
+                    )
+            
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        read_stream(process.stdout, stdout_data, False),
+                        read_stream(process.stderr, stderr_data, True),
+                        process.wait()
+                    ),
                     timeout=timeout
                 )
             except asyncio.TimeoutError:
@@ -104,14 +149,14 @@ class TerminalTool(Tool):
                 return {
                     "error": f"Command timed out after {timeout}s",
                     "exit_code": -1,
-                    "stdout": "",
-                    "stderr": f"Timeout after {timeout}s"
+                    "stdout": "".join(stdout_data),
+                    "stderr": "".join(stderr_data) + f"\nTimeout after {timeout}s"
                 }
             
             return {
                 "exit_code": process.returncode,
-                "stdout": stdout.decode("utf-8", errors="replace"),
-                "stderr": stderr.decode("utf-8", errors="replace"),
+                "stdout": "".join(stdout_data),
+                "stderr": "".join(stderr_data),
                 "command": command
             }
             

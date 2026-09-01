@@ -34,7 +34,13 @@ Respond in JSON format:
 class MemorySummarizer:
     def __init__(self, store: SQLiteStore, model_adapter: Optional[ModelAdapter] = None, vector_store: Optional[Any] = None):
         self.store = store
-        self.model = model_adapter or get_model_registry().get()
+        if model_adapter is not None:
+            self.model = model_adapter
+        else:
+            try:
+                self.model = get_model_registry().get()
+            except Exception:
+                self.model = None
         self.vector_store = vector_store
         self._summarization_interval = 10
     

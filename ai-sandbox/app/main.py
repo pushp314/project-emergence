@@ -66,9 +66,11 @@ class SandboxApp:
         self._stt_task: Optional[asyncio.Task] = None
     
     def _load_config(self, config_path: Optional[str]) -> dict:
-        if config_path and Path(config_path).exists():
-            with open(config_path) as f:
-                return yaml.safe_load(f)
+        paths = [config_path, "config.yaml", "config/config.yaml"]
+        for p in paths:
+            if p and Path(p).exists():
+                with open(p) as f:
+                    return yaml.safe_load(f) or {}
         return {}
     
     async def initialize(self) -> None:
@@ -153,7 +155,14 @@ class SandboxApp:
         import os
         self.vector_store = VectorMemoryStore(os.path.dirname(db_path))
         
-        summarizer = MemorySummarizer(store, self.model_registry.get("default"), vector_store=self.vector_store)
+        default_model = None
+        if self.model_registry.list_models():
+            try:
+                default_model = self.model_registry.get()
+            except Exception:
+                default_model = self.model_registry.get(self.model_registry.list_models()[0])
+
+        summarizer = MemorySummarizer(store, default_model, vector_store=self.vector_store)
         summarizer.set_interval(summarization_interval)
         self.memory_manager = MemoryManager(store, summarizer, self.event_bus, max_entries)
         
@@ -173,11 +182,13 @@ class SandboxApp:
         )
         
         permissions_config = self.config.get("permissions", {})
+        from app.permissions.manager import PermissionManager, set_permission_manager
         self.permission_manager = PermissionManager(
             self.event_bus,
             timeout_seconds=permissions_config.get("timeout_seconds", 30),
             auto_approve_low_risk=permissions_config.get("auto_approve_low_risk", False)
         )
+        set_permission_manager(self.permission_manager)
         
         resources_config = self.config.get("resources", {})
         self.resource_manager = ResourceManager(
@@ -292,6 +303,18 @@ class SandboxApp:
         from app.tools.vision import ScreenshotTool
         vision_tool = ScreenshotTool()
         self.tool_gateway.register(vision_tool)
+
+        from app.tools.mac_notify import MacNotifyTool
+        mac_notify = MacNotifyTool()
+        self.tool_gateway.register(mac_notify)
+
+        from app.tools.spotlight import SpotlightTool
+        spotlight = SpotlightTool()
+        self.tool_gateway.register(spotlight)
+
+        from app.tools.window_manager import MacWindowManagerTool
+        win_tool = MacWindowManagerTool()
+        self.tool_gateway.register(win_tool)
         
         from app.tools.dynamic_creator import CreateToolTool
         dynamic_tool = CreateToolTool()
@@ -330,8 +353,19 @@ class SandboxApp:
         
         self.tool_gateway.set_permission_checker(permission_checker)
         
-        agent_c = create_observer_agent("agent_c", self.model_registry.get("observer"))
-        agent_a = create_explorer_agent("agent_a", self.model_registry.get("default"))
+        observer_model = (
+            self.model_registry.get("observer")
+            if "observer" in self.model_registry.list_models()
+            else (self.model_registry.get("default") if "default" in self.model_registry.list_models() else self.model_registry.get())
+        )
+        agent_c = create_observer_agent("agent_c", observer_model)
+
+        atlas_model = (
+            self.model_registry.get("default")
+            if "default" in self.model_registry.list_models()
+            else (self.model_registry.get("atlas") if "atlas" in self.model_registry.list_models() else self.model_registry.get())
+        )
+        agent_a = create_explorer_agent("agent_a", atlas_model)
         agent_a.config.agent_identity = "manager"
         agent_a.config.name = "Manager CEO"
         agent_a.config.system_prompt = """You are the Manager Agent (CEO).

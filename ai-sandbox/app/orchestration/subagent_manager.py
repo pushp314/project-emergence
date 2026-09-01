@@ -22,15 +22,19 @@ class SubagentManager:
         
         async def run_subagent():
             logger.info(f"Starting subagent {agent_id} for task {task_id}")
-            # Mocking the actual ConversationEngine instantiation for simplicity here.
-            # In a full integration, we'd spawn a ConversationEngine with just this agent.
-            # Here we simulate the work being done.
-            await asyncio.sleep(2)
-            
-            # Simulate a result
-            result = f"Task '{objective}' completed successfully by {agent_id} using {tools}."
-            self.task_results[task_id] = result
-            logger.info(f"Subagent task {task_id} completed.")
+            from app.agents.system_controller import get_mac_controller
+            try:
+                controller = get_mac_controller()
+                result = await controller.execute_task(
+                    task=objective,
+                    conversation_id=task_id,
+                    mode="24/7"
+                )
+                self.task_results[task_id] = result
+                logger.info(f"Subagent task {task_id} completed successfully.")
+            except Exception as e:
+                logger.error(f"Subagent task {task_id} failed: {e}")
+                self.task_results[task_id] = {"success": False, "error": str(e)}
             
         task = asyncio.create_task(run_subagent())
         self.active_tasks[task_id] = task

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class EventType(str, Enum):
     AGENT_MESSAGE = "agent.message"
+    AGENT_CHUNK = "agent.chunk"
     AGENT_STARTED = "agent.started"
     AGENT_COMPLETED = "agent.completed"
     AGENT_ERROR = "agent.error"
@@ -25,6 +26,7 @@ class EventType(str, Enum):
     
     TOOL_REQUEST = "tool.request"
     TOOL_STARTED = "tool.started"
+    TOOL_STDOUT = "tool.stdout"
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"
     
@@ -59,24 +61,42 @@ class EventType(str, Enum):
     CIRCUIT_BREAKER_UPDATE = "model.circuit_breaker_update"
 
 
-@dataclass
 class Event:
-    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    type: EventType = EventType.AGENT_MESSAGE
-    conversation_id: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    payload: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    def __init__(
+        self,
+        event_id: Optional[str] = None,
+        type: Optional[EventType] = None,
+        event_type: Optional[EventType] = None,
+        conversation_id: str = "",
+        timestamp: Optional[str] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        agent_id: Optional[str] = None,
+        **kwargs
+    ):
+        self.event_id = event_id or str(uuid.uuid4())
+        self.type = type or event_type or EventType.AGENT_MESSAGE
+        self.conversation_id = conversation_id
+        self.timestamp = timestamp or datetime.now(timezone.utc).isoformat()
+        self.payload = payload or {}
+        self.metadata = metadata or {}
+        self.agent_id = agent_id or self.payload.get("agent_id", "")
+        for k, v in kwargs.items():
+            setattr(self, k, v)
     
-    def to_json(self) -> str:
-        return json.dumps({
+    def to_dict(self) -> Dict[str, Any]:
+        return {
             "event_id": self.event_id,
-            "type": self.type.value,
+            "type": self.type.value if hasattr(self.type, "value") else str(self.type),
             "conversation_id": self.conversation_id,
             "timestamp": self.timestamp,
+            "agent_id": self.agent_id,
             "payload": self.payload,
             "metadata": self.metadata
-        })
+        }
+    
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
     
     @classmethod
     def from_json(cls, data: str) -> Event:
@@ -111,6 +131,9 @@ class EventBus:
     def unsubscribe(self, event_type: EventType, callback: Callable[[Event], Any]) -> None:
         if event_type in self._subscribers:
             self._subscribers[event_type].discard(callback)
+
+    def unsubscribe_all(self, callback: Callable[[Event], Any]) -> None:
+        self._wildcard_subscribers.discard(callback)
     
     async def publish(self, event: Event) -> None:
         async with self._lock:

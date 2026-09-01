@@ -25,7 +25,15 @@ class ReportGenerator:
         self.reports_dir = Path(reports_dir)
         self.reports_dir.mkdir(parents=True, exist_ok=True)
     
-    def generate_final_report(self, session_id: str) -> str:
+    def generate_final_report(self, session_id: Optional[str] = None) -> str:
+        if not session_id:
+            if self.session_manager and getattr(self.session_manager, "current_session", None):
+                session_id = self.session_manager.current_session.session_id
+            elif self.evidence_manager and getattr(self.evidence_manager, "_session_id", None):
+                session_id = self.evidence_manager._session_id
+            else:
+                session_id = "default_session"
+
         session_info = self.session_manager.get_session_info(session_id) if self.session_manager else None
         if not session_info:
             session_info = {

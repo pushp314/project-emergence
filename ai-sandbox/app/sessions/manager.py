@@ -368,6 +368,33 @@ class SessionManager:
             row = conn.execute("SELECT * FROM session_metadata WHERE session_id = ?", (session_id,)).fetchone()
             return dict(row) if row else None
 
+    async def delete_session(self, session_id: str) -> bool:
+        """Deletes a session from the metadata table."""
+        with self._get_conn() as conn:
+            # Check if it exists
+            row = conn.execute("SELECT session_id FROM session_metadata WHERE session_id = ?", (session_id,)).fetchone()
+            if not row:
+                return False
+            
+            # Delete it
+            conn.execute("DELETE FROM session_metadata WHERE session_id = ?", (session_id,))
+            conn.commit()
+            
+            # Note: We should ideally also delete evidence/messages, but EvidenceManager handles that.
+            # We'll trigger an event so EvidenceManager can clean up if implemented.
+            await self.event_bus.publish_type(
+                EventType.SYSTEM_STOP, # Re-using an event or we could add a new one, but for now just log it
+                session_id,
+                {"session_id": session_id, "action": "deleted"}
+            )
+            
+            # If we are deleting the current session, clear it
+            if self._current_session and self._current_session.session_id == session_id:
+                self._current_session = None
+                
+            logger.info(f"Deleted session {session_id}")
+            return True
+
 
 _session_manager: Optional[SessionManager] = None
 

@@ -55,7 +55,8 @@ class PermissionManager:
         reason: str,
         risk: RiskLevel = RiskLevel.MEDIUM,
         scope: PermissionLevel = PermissionLevel.READ,
-        duration: str = "once"
+        duration: str = "once",
+        timeout: Optional[int] = None
     ) -> bool:
         request = PermissionRequest(
             agent_id=agent_id,
@@ -90,7 +91,7 @@ class PermissionManager:
         )
         
         try:
-            result = await asyncio.wait_for(pending.future, timeout=self.timeout_seconds)
+            result = await asyncio.wait_for(pending.future, timeout=timeout or self.timeout_seconds)
             return result
         except asyncio.TimeoutError:
             pending.status = PermissionStatus.EXPIRED

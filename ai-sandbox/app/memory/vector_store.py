@@ -87,6 +87,14 @@ class VectorMemoryStore:
         """Async wrapper for add_memory."""
         await asyncio.to_thread(self.add_memory, memory_id, content, metadata)
 
+    def search(self, query: str, limit: int = 5, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Alias for query_memories."""
+        return self.query_memories(query, n_results=limit, where=where)
+
+    async def search_async(self, query: str, limit: int = 5, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Async alias for query_memories_async."""
+        return await self.query_memories_async(query, n_results=limit, where=where)
+
     async def query_memories_async(self, query: str, n_results: int = 5, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Async wrapper for query_memories."""
         return await asyncio.to_thread(self.query_memories, query, n_results, where)
